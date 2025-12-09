@@ -19,12 +19,14 @@ type CityState struct {
 	State string
 }
 
+var mapFilePath = "assets/airport_code_map.gob"
+var newFilePath = "test.xlsx"
+var templateFilePath = "assets/nationwide_template.xlsx"
+
 func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 
-	mapFilePath := "assets/airport_code_map.gob"
-
 	if _, err := os.Stat(mapFilePath); err != nil {
-		fmt.Println("Creating airport map...")
+		fmt.Println("No map found. Creating airport map...")
 		createAirportMap()
 	}
 
@@ -32,6 +34,7 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 	mapfile, err := os.Open(mapFilePath)
 	if err != nil {
 		fmt.Println("error opening map file:", err)
+		reportServerError(w)
 		return
 	}
 	defer mapfile.Close()
@@ -39,21 +42,24 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 	decoder := gob.NewDecoder(mapfile)
 	if err = decoder.Decode(&airport_code_map); err != nil {
 		fmt.Println("error decoding map:", err)
+		reportServerError(w)
 		return
 	}
 
-	newFilePath := "test.xlsx"
-	templateFilePath := "assets/nationwide_template.xlsx"
-
-	copyTemplate(templateFilePath, newFilePath)
+	if err = copyTemplate(templateFilePath, newFilePath); err != nil {
+		fmt.Println("error copying template:", err)
+		return
+	}
 
 	dst, err := excelize.OpenFile(newFilePath)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("error opening new excel file:", err)
+		reportServerError(w)
 		return
 	}
 	defer dst.Close()
 
+	// THIS NEEDS TO BE CHANGED TO READ JSON PAYLOAD FROM REQUEST
 	src, err := excelize.OpenFile("In-Service Inventory D2D 12.8.25.xlsx")
 	if err != nil {
 		fmt.Println(err)
@@ -65,7 +71,7 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityState) {
+func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityState) error {
 
 	// newHeaders := []string{"State", "City", "Yr", "Make", "Model", "Trim", "Drive", "Vin", "Color", "Miles", "Price", "MSRP", "Notes", "Notes2"}
 	dst.SetCellValue("Sheet1", "G1", "Drive")                    // rename "Body Type" to "Drive"
@@ -74,7 +80,7 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 	srcRows, err := src.GetRows("Sheet1")
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err
 	}
 
 	adjust := 0 // to adjust for skipped rows due to missing airport codes
@@ -99,14 +105,14 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 		rowRef := fmt.Sprintf("A%v", rowNum)
 		if err = dst.SetSheetRow("Sheet1", rowRef, &rowData); err != nil {
 			fmt.Println("error setting row:", err)
-			return
+			return err
 		}
 
 		// check if MSRP is sane, if not, set to n/a
 		msrpStr, err := dst.GetCellValue("Sheet1", fmt.Sprintf("L%v", rowNum))
 		if err != nil {
 			fmt.Println("error getting MSRP cell value:", err)
-			return
+			return err
 		}
 
 		msrpStr = strings.TrimSpace(msrpStr)
@@ -122,7 +128,7 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 	dstRows, err := dst.GetRows("Sheet1")
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err
 	}
 
 	slices.SortFunc(dstRows[1:], func(a, b []string) int {
@@ -154,11 +160,11 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 
 		if err = dst.SetSheetRow("Sheet1", rowRef, &rowData); err != nil {
 			fmt.Println("error setting sorted row:", err)
-			return
+			return err
 		}
 	}
 
-	// convert Yr, Miles, Price, MSRP to numbers, skip header row
+	// convert Yr, Miles, Price, MSRP to Number style, skip header row
 	fmt.Println("Converting Number Cells...")
 	decimalPlaces := 0
 	numID, err := dst.NewStyle(&excelize.Style{
@@ -170,7 +176,7 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 	})
 	if err != nil {
 		fmt.Println("error creating style:", err)
-		return
+		return err
 	}
 	currencyID, err := dst.NewStyle(&excelize.Style{
 		NumFmt:        177, // US Dollar format
@@ -182,12 +188,13 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 	})
 	if err != nil {
 		fmt.Println("error creating style:", err)
-		return
+		return err
 	}
 	dst.SetCellStyle("Sheet1", "C2", fmt.Sprintf("C%v", rowNum), numID)
 	dst.SetCellStyle("Sheet1", "J2", fmt.Sprintf("J%v", rowNum), numID)
 	dst.SetCellStyle("Sheet1", "K2", fmt.Sprintf("L%v", rowNum), currencyID)
 
+	// CONSIDER UPDATING THIS TO NOT SAVE NEW FILE TO DISK (MIGHT BE GOOD IDEA TO SAVE THO IDK)
 	//save file
 	fmt.Println("Saving file...")
 	if err = dst.SaveAs("test.xlsx"); err != nil {
@@ -196,21 +203,23 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 
 	fmt.Println("Sheet generated successfully.")
 
+	return nil
+
 }
 
-func createAirportMap() {
+func createAirportMap() error {
 
 	f, err := excelize.OpenFile("assets/Airport_Codes.xlsx")
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err
 	}
 	defer f.Close()
 
 	mapfile, err := os.Create("assets/airport_code_map.gob")
 	if err != nil {
 		fmt.Println("error creating map file:", err)
-		return
+		return err
 	}
 	defer mapfile.Close()
 
@@ -219,7 +228,7 @@ func createAirportMap() {
 	rows, err := f.GetRows("Sheet1")
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err
 	}
 
 	for i, row := range rows {
@@ -232,39 +241,48 @@ func createAirportMap() {
 	encoder := gob.NewEncoder(mapfile)
 	if err = encoder.Encode(airport_code_map); err != nil {
 		fmt.Println("error encoding map:", err)
-		return
+		return err
 	}
 
 	fmt.Println("Airport code map created successfully.")
 
+	return nil
+
 }
 
-func copyTemplate(templateFilePath, newFilePath string) {
+func copyTemplate(templateFilePath, newFilePath string) error {
 
 	template, err := os.Open(templateFilePath)
 	if err != nil {
 		fmt.Println("error opening template file:", err)
-		return
+		return err
 	}
 	defer template.Close()
 
 	newFile, err := os.Create(newFilePath)
 	if err != nil {
 		fmt.Println("error creating new file:", err)
-		return
+		return err
 	}
 	defer newFile.Close()
 
 	_, err = io.Copy(newFile, template)
 	if err != nil {
 		fmt.Println("error copying template to new file:", err)
-		return
+		return err
 	}
 
 	err = newFile.Sync()
 	if err != nil {
 		fmt.Println("error syncing file to disk:", err)
-		return
+		return err
 	}
 
+	return nil
+
+}
+
+func reportServerError(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte("Internal Server Error"))
 }
