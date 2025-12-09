@@ -21,7 +21,7 @@ type CityState struct {
 
 func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 
-	mapFilePath := "airport_code_map.gob"
+	mapFilePath := "assets/airport_code_map.gob"
 
 	if _, err := os.Stat(mapFilePath); err != nil {
 		fmt.Println("Creating airport map...")
