@@ -1,0 +1,6 @@
+GET http://72.222.78.148:52431/api/
+Content-Type: application/json
+
+###
+GET http://www.soonerfleet.com/
+Content-Type: application/json

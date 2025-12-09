@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -19,7 +18,7 @@ type apiConfig struct {
 func main() {
 
 	const filepath = "."
-	const port = "8080"
+	const port = "52431"
 
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
@@ -35,20 +34,27 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir(filepath))))
+	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(filepath))))
+	mux.HandleFunc("/api/create_sheet", handlerCreateSheet)
 
 	server := &http.Server{
-		Addr:    os.Getenv("BIND_ADDR") + ":" + port,
+		Addr:    os.Getenv("BIND_ADDR_PUBLIC") + ":" + port,
 		Handler: mux,
 	}
 
-	log.Printf("Serving files from %s on port: %s\n", filepath, port)
-	log.Fatal(server.ListenAndServe())
-
 	cfg.doNothing()
 
-	fmt.Println("Server exists")
+	log.Printf("Server is live")
+	log.Printf("Serving files from %s on port: %s\n", filepath, port)
+	log.Fatal(server.ListenAndServe())
+	log.Printf("Server closed")
+
 }
 
 func (cfg *apiConfig) doNothing() {
+}
+
+func (cfg *apiConfig) handlerTest(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("It is working!"))
+	w.WriteHeader(http.StatusOK)
 }
