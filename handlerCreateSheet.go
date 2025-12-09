@@ -43,7 +43,7 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newFilePath := "test.xlsx"
-	templateFilePath := "nationwide_template.xlsx"
+	templateFilePath := "assets/nationwide_template.xlsx"
 
 	copyTemplate(templateFilePath, newFilePath)
 
@@ -200,14 +200,14 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 
 func createAirportMap() {
 
-	f, err := excelize.OpenFile("Airport_Codes.xlsx")
+	f, err := excelize.OpenFile("assets/Airport_Codes.xlsx")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer f.Close()
 
-	mapfile, err := os.Create("airport_code_map.gob")
+	mapfile, err := os.Create("assets/airport_code_map.gob")
 	if err != nil {
 		fmt.Println("error creating map file:", err)
 		return
