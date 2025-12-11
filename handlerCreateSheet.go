@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,11 +20,24 @@ type CityState struct {
 	State string
 }
 
+// code map
 var mapFilePath = "assets/airport_code_map.gob"
-var newFilePath = "test.xlsx"
+
+// uploaded file to be modified
+var newFilePath = "assets/uploaded_file.xlsx"
+
+// template for modified file (contains most relevant formatting already)
 var templateFilePath = "assets/nationwide_template.xlsx"
 
+// copied template location
+var templateCopyPath = "assets/nationwide_template_copy.xlsx"
+
 func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
+
+	if err := saveReqIntoFile(w, r); err != nil {
+		fmt.Println("error saving file:", err)
+		reportServerError(w)
+	}
 
 	if _, err := os.Stat(mapFilePath); err != nil {
 		fmt.Println("No map found. Creating airport map...")
@@ -46,12 +60,12 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = copyTemplate(templateFilePath, newFilePath); err != nil {
+	if err = copyTemplate(templateFilePath, templateCopyPath); err != nil {
 		fmt.Println("error copying template:", err)
 		return
 	}
 
-	dst, err := excelize.OpenFile(newFilePath)
+	dst, err := excelize.OpenFile(templateCopyPath)
 	if err != nil {
 		fmt.Println("error opening new excel file:", err)
 		reportServerError(w)
@@ -60,7 +74,7 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 	defer dst.Close()
 
 	// THIS NEEDS TO BE CHANGED TO READ JSON PAYLOAD FROM REQUEST
-	src, err := excelize.OpenFile("In-Service Inventory D2D 12.8.25.xlsx")
+	src, err := excelize.OpenFile(newFilePath)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -250,16 +264,16 @@ func createAirportMap() error {
 
 }
 
-func copyTemplate(templateFilePath, newFilePath string) error {
+func copyTemplate(templatePath, copyPath string) error {
 
-	template, err := os.Open(templateFilePath)
+	template, err := os.Open(templatePath)
 	if err != nil {
 		fmt.Println("error opening template file:", err)
 		return err
 	}
 	defer template.Close()
 
-	newFile, err := os.Create(newFilePath)
+	newFile, err := os.Create(copyPath)
 	if err != nil {
 		fmt.Println("error creating new file:", err)
 		return err
@@ -280,6 +294,29 @@ func copyTemplate(templateFilePath, newFilePath string) error {
 
 	return nil
 
+}
+
+func saveReqIntoFile(w http.ResponseWriter, r *http.Request) error {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return errors.New("bad method")
+	}
+
+	f, err := os.Create(newFilePath)
+	if err != nil {
+		fmt.Println("error creating uploaded file:", err)
+		return err
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, r.Body); err != nil {
+		http.Error(w, "failed to save file", http.StatusInternalServerError)
+		fmt.Println("failed to save file")
+		return err
+	}
+
+	return nil
 }
 
 func reportServerError(w http.ResponseWriter) {
