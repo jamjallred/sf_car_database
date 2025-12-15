@@ -73,7 +73,6 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dst.Close()
 
-	// THIS NEEDS TO BE CHANGED TO READ JSON PAYLOAD FROM REQUEST
 	src, err := excelize.OpenFile(newFilePath)
 	if err != nil {
 		fmt.Println(err)
@@ -81,7 +80,13 @@ func handlerCreateSheet(w http.ResponseWriter, r *http.Request) {
 	}
 	defer src.Close()
 
-	generateSheet(dst, src, airport_code_map)
+	if err = generateSheet(dst, src, airport_code_map); err != nil {
+		fmt.Println("error generating sheet:", err)
+		reportServerError(w)
+		return
+	}
+
+	respondWithFileStream(w)
 
 }
 
@@ -211,7 +216,7 @@ func generateSheet(dst, src *excelize.File, airport_code_map map[string]CityStat
 	// CONSIDER UPDATING THIS TO NOT SAVE NEW FILE TO DISK (MIGHT BE GOOD IDEA TO SAVE THO IDK)
 	//save file
 	fmt.Println("Saving file...")
-	if err = dst.SaveAs("test.xlsx"); err != nil {
+	if err = dst.SaveAs("assets/final.xlsx"); err != nil {
 		log.Fatalf("error saving file: %v", err)
 	}
 
@@ -317,6 +322,22 @@ func saveReqIntoFile(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return nil
+}
+
+func respondWithFileStream(w http.ResponseWriter) {
+
+	f, err := os.Open("assets/final.xlsx")
+	if err != nil {
+		http.Error(w, "assets/final.xlsx not found", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if _, err := io.Copy(w, f); err != nil {
+		log.Println("error copying assets/final.xlsx into response")
+	}
 }
 
 func reportServerError(w http.ResponseWriter) {

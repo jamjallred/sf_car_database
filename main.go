@@ -36,6 +36,7 @@ func main() {
 
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(filepath))))
 	mux.HandleFunc("/api/create_sheet", handlerCreateSheet)
+	mux.HandleFunc("/api/display_data", handlerDisplayTable)
 
 	server := &http.Server{
 		Addr:    os.Getenv("BIND_ADDR_PUBLIC") + ":" + port,
