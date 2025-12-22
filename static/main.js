@@ -1,9 +1,12 @@
 async function loadResults() {
+  const input = document.getElementById("pk-input")
+  const pkList = input.value;
+
   const tbody = document.getElementById("results-body");
   tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
 
   try {
-    const resp = await fetch("/api/results");
+    const resp = await fetch("/api/results?ids=" + encodeURIComponent(pkList));
     if (!resp.ok) {
       throw new Error("HTTP " + resp.status);
     }
@@ -36,4 +39,6 @@ async function loadResults() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", loadResults);
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("load-btn").addEventListener("click", loadResults)
+});
