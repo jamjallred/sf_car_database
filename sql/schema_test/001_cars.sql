@@ -7,7 +7,7 @@ CREATE TABLE cars (
     model TEXT NOT NULL,
     trim TEXT NOT NULL,
     drive TEXT NOT NULL,
-    vin TEXT UNIQUE NOT NULL,
+    vin TEXT PRIMARY KEY,
     color TEXT NOT NULL,
     miles INTEGER NOT NULL,
     price INTEGER NOT NULL,

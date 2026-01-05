@@ -12,7 +12,8 @@ import (
 )
 
 type apiConfig struct {
-	dbQueries *database.Queries
+	dbQueries      *database.Queries
+	dbQueries_test *database.Queries
 }
 
 func main() {
@@ -22,14 +23,18 @@ func main() {
 
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	dbURL_test := os.Getenv("DB_TEST_URL")
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Failed to open database")
 	}
 
+	db_test, err := sql.Open("postgres", dbURL_test)
+
 	cfg := &apiConfig{
-		dbQueries: database.New(db),
+		dbQueries:      database.New(db),
+		dbQueries_test: database.New(db_test),
 	}
 
 	mux := http.NewServeMux()
