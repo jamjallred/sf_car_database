@@ -3,19 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <title>Query Results</title>
+
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+
+  <!-- jQuery (required by DataTables) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <!-- DataTables JS -->
+  <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 </head>
 <body>
+
+  <div id="profile-selector" style="position: absolute; top: 10px; right: 10px;">
+      <label for="username">Select your profile:</label>
+      <select id="username" onchange="saveProfile()">
+          <option value="">-- Choose your name --</option>
+          <option value="Mike">Mike</option>
+          <option value="Stan">Stan</option>
+          <option value="Jaxon">Jaxon</option>
+          <option value="Gregg">Gregg</option>
+      </select>
+      <div id="current-profile" style="margin-top: 5px; font-size: 0.9em; color: #666;">
+        <!--current profile displayed here-->
+      </div>
+  </div>
+
   <h1>Query Results</h1>
+
   <label for="pk-input">Primary keys (comma-separated):</label>
   <input id="pk-input" type="text" placeholder="1,5,12">
   <button id="load-btn">Load rows</button>
 
-  <table border="1">
+  <table id="results-table" border="1">
     <thead>
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-      </tr>
+      <!-- Headers generated automatically here -->
     </thead>
     <tbody id="results-body">
       <!-- rows will be inserted here -->

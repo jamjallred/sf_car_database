@@ -16,7 +16,7 @@ INSERT INTO cars (
 VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
-RETURNING state, city, year, make, model, drive, vin, color, miles, price, msrp
+RETURNING state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, notes1, notes2
 `
 
 type CreateCarParams struct {
@@ -54,12 +54,58 @@ func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, erro
 		&i.Year,
 		&i.Make,
 		&i.Model,
+		&i.Trim,
 		&i.Drive,
 		&i.Vin,
 		&i.Color,
 		&i.Miles,
 		&i.Price,
 		&i.Msrp,
+		&i.Notes1,
+		&i.Notes2,
 	)
 	return i, err
+}
+
+const getFirstXRows = `-- name: GetFirstXRows :many
+SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, notes1, notes2 FROM cars
+LIMIT $1
+`
+
+func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error) {
+	rows, err := q.db.QueryContext(ctx, getFirstXRows, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Car
+	for rows.Next() {
+		var i Car
+		if err := rows.Scan(
+			&i.State,
+			&i.City,
+			&i.Year,
+			&i.Make,
+			&i.Model,
+			&i.Trim,
+			&i.Drive,
+			&i.Vin,
+			&i.Color,
+			&i.Miles,
+			&i.Price,
+			&i.Msrp,
+			&i.Notes1,
+			&i.Notes2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

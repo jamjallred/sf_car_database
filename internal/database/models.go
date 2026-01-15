@@ -4,16 +4,47 @@
 
 package database
 
+import (
+	"database/sql"
+	"encoding/json"
+)
+
 type Car struct {
-	State string
-	City  string
-	Year  string
-	Make  string
-	Model string
-	Drive string
-	Vin   string
-	Color string
-	Miles int32
-	Price int32
-	Msrp  int32
+	State  string
+	City   string
+	Year   string
+	Make   string
+	Model  string
+	Trim   string
+	Drive  string
+	Vin    string
+	Color  string
+	Miles  int32
+	Price  int32
+	Msrp   int32
+	Notes1 sql.NullString
+	Notes2 sql.NullString
+}
+
+type CarsStaging struct {
+	State  string
+	City   string
+	Year   string
+	Make   string
+	Model  string
+	Trim   string
+	Drive  string
+	Vin    string
+	Color  string
+	Miles  int32
+	Price  string
+	Msrp   string
+	Notes1 sql.NullString
+	Notes2 sql.NullString
+}
+
+type Dib struct {
+	Vin       string
+	Queue     json.RawMessage
+	UpdatedAt sql.NullTime
 }

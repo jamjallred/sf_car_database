@@ -5,4 +5,6 @@ sql:
     engine: "postgresql"
     gen:
       go:
+        package: "database"
         out: "internal/database"
+        emit_pointers_for_null_types: true

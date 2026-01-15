@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/jamjallred/sf_car_database/internal/database"
 	"github.com/joho/godotenv"
@@ -18,23 +19,43 @@ type apiConfig struct {
 
 func main() {
 
-	const filepath = "."
+	const filepath = "./static"
 	const port = "52431"
 
 	godotenv.Load()
-	dbURL := os.Getenv("DB_URL")
-	dbURL_test := os.Getenv("DB_TEST_URL")
+
+	env := os.Getenv("ENV") // "prod" or "test"
+	if env == "" {
+		env = "test" // default test
+	}
+
+	var dbURL string
+	if env == "prod" {
+		dbURL = os.Getenv("DB_URL")
+	} else {
+		dbURL = os.Getenv("DB_TEST_URL")
+	}
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatal("Failed to open database")
+		log.Fatalf("Failed to open database: %v", err)
 	}
 
-	db_test, err := sql.Open("postgres", dbURL_test)
+	var dbName string
+	err = db.QueryRow("SELECT current_database()").Scan(&dbName)
+	if err != nil {
+		log.Fatalf("Failed to verify database connection: %v", err)
+	}
+
+	log.Printf("✓ Connected to database: %s (environment: %s)", dbName, env)
+
+	// Sanity check
+	if env == "prod" && strings.Contains(dbName, "test") {
+		log.Fatal("DANGER: Running in production but connected to test database")
+	}
 
 	cfg := &apiConfig{
-		dbQueries:      database.New(db),
-		dbQueries_test: database.New(db_test),
+		dbQueries: database.New(db),
 	}
 
 	mux := http.NewServeMux()
@@ -42,6 +63,7 @@ func main() {
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(filepath))))
 	mux.HandleFunc("/api/create_sheet", handlerCreateSheet)
 	mux.HandleFunc("/api/display_data", handlerDisplayTable)
+	mux.HandleFunc("/api/displaytestdata", cfg.handlerDisplayTestData)
 
 	server := &http.Server{
 		Addr:    os.Getenv("BIND_ADDR_PUBLIC") + ":" + port,
