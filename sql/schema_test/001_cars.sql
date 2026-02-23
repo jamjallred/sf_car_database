@@ -13,25 +13,22 @@ CREATE TABLE cars (
     price INTEGER NOT NULL,
     msrp INTEGER NOT NULL,
     notes1 TEXT,
-    notes2 TEXT
+    notes2 TEXT,
+    timestamp TIMESTAMP,
 );
 
-CREATE TABLE cars_staging (
-    state TEXT NOT NULL,
-    city TEXT NOT NULL,
-    year TEXT NOT NULL,
-    make TEXT NOT NULL,
-    model TEXT NOT NULL,
-    trim TEXT NOT NULL,
-    drive TEXT NOT NULL,
-    vin TEXT UNIQUE NOT NULL,
-    color TEXT NOT NULL,
-    miles INTEGER NOT NULL,
-    price TEXT NOT NULL,
-    msrp TEXT NOT NULL,
-    notes1 TEXT,
-    notes2 TEXT
-);
+CREATE TABLE customers (
+    customer_id TEXT PRIMARY KEY
+)
+
+CREATE TABLE cars_customers (
+    id SERIAL PRIMARY KEY,
+    vin TEXT references cars(vin),
+    customer_id INTEGER REFERENCES customers(customer_id),
+    user TEXT NOT NULL,
+    timestamp TIMESTAMP NOT NULL
+    UNIQUE (vin, customer_id)
+)
 
 -- +goose Down
 DROP TABLE cars;
