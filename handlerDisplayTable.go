@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -19,6 +20,8 @@ func (cfg *apiConfig) handlerDisplayTestData(w http.ResponseWriter, r *http.Requ
 		log.Printf("Query error: %v", err)
 		return
 	}
+
+	fmt.Println(rows)
 
 	w.Header().Set("Content-Type", "application/json")
 

@@ -5,8 +5,7 @@
 package database
 
 import (
-	"database/sql"
-	"encoding/json"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Car struct {
@@ -22,8 +21,8 @@ type Car struct {
 	Miles  int32
 	Price  int32
 	Msrp   int32
-	Notes1 sql.NullString
-	Notes2 sql.NullString
+	Notes1 *string
+	Notes2 *string
 }
 
 type CarsStaging struct {
@@ -39,12 +38,12 @@ type CarsStaging struct {
 	Miles  int32
 	Price  string
 	Msrp   string
-	Notes1 sql.NullString
-	Notes2 sql.NullString
+	Notes1 *string
+	Notes2 *string
 }
 
 type Dib struct {
 	Vin       string
-	Queue     json.RawMessage
-	UpdatedAt sql.NullTime
+	Queue     []byte
+	UpdatedAt pgtype.Timestamp
 }

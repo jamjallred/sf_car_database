@@ -34,7 +34,7 @@ type CreateCarParams struct {
 }
 
 func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, error) {
-	row := q.db.QueryRowContext(ctx, createCar,
+	row := q.db.QueryRow(ctx, createCar,
 		arg.State,
 		arg.City,
 		arg.Year,
@@ -73,7 +73,7 @@ LIMIT $1
 `
 
 func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error) {
-	rows, err := q.db.QueryContext(ctx, getFirstXRows, limit)
+	rows, err := q.db.Query(ctx, getFirstXRows, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +100,6 @@ func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error)
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

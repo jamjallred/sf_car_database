@@ -1,12 +1,13 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jamjallred/sf_car_database/internal/database"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -36,13 +37,13 @@ func main() {
 		dbURL = os.Getenv("DB_TEST_URL")
 	}
 
-	db, err := sql.Open("postgres", dbURL)
+	db, err := pgxpool.New(context.Background(), dbURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
 
 	var dbName string
-	err = db.QueryRow("SELECT current_database()").Scan(&dbName)
+	err = db.QueryRow(context.Background(), "SELECT current_database()").Scan(&dbName)
 	if err != nil {
 		log.Fatalf("Failed to verify database connection: %v", err)
 	}
