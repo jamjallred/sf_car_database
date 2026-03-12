@@ -21,9 +21,10 @@ type apiConfig struct {
 func main() {
 
 	const filepath = "./static"
-	const port = "52431"
 
 	godotenv.Load()
+
+	port := os.Getenv("PORT")
 
 	env := os.Getenv("ENV") // "prod" or "test"
 	if env == "" {
@@ -65,6 +66,8 @@ func main() {
 	mux.HandleFunc("/api/create_sheet", handlerCreateSheet)
 	mux.HandleFunc("/api/display_data", handlerDisplayTable)
 	mux.HandleFunc("/api/displaytestdata", cfg.handlerDisplayTestData)
+	mux.HandleFunc("/api/saveToDB", cfg.handlerSaveToDB)
+	mux.HandleFunc("/api/updateAirportCodes", cfg.updateAirportCodes)
 
 	server := &http.Server{
 		Addr:    os.Getenv("BIND_ADDR_PUBLIC") + ":" + port,

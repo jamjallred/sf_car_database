@@ -35,3 +35,5 @@ go.work.sum
 *.xlsx
 
 /assets
+
+db_server
