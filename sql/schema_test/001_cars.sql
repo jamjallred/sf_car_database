@@ -19,7 +19,7 @@ CREATE TABLE cars (
 
 CREATE TABLE customers (
     customer_id TEXT PRIMARY KEY
-)
+);
 
 CREATE TABLE cars_customers (
     id SERIAL PRIMARY KEY,
@@ -28,8 +28,9 @@ CREATE TABLE cars_customers (
     user TEXT NOT NULL,
     timestamp TIMESTAMP NOT NULL
     UNIQUE (vin, customer_id)
-)
+);
 
 -- +goose Down
 DROP TABLE cars;
 DROP TABLE cars_staging;
+DROP TABLE cars_customers;

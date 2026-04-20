@@ -9,41 +9,53 @@ import (
 )
 
 type Car struct {
-	State  string
-	City   string
-	Year   string
-	Make   string
-	Model  string
-	Trim   string
-	Drive  string
-	Vin    string
-	Color  string
-	Miles  int32
-	Price  int32
-	Msrp   int32
-	Notes1 *string
-	Notes2 *string
+	State     string
+	City      string
+	Year      string
+	Make      string
+	Model     string
+	Trim      string
+	Drive     string
+	Vin       string
+	Color     string
+	Miles     int32
+	Price     int32
+	Msrp      int32
+	Timestamp pgtype.Timestamp
+}
+
+type CarsCustomer struct {
+	ID         int32
+	Vin        *string
+	CustomerID *int32
+	Username   string
+	Timestamp  pgtype.Timestamp
 }
 
 type CarsStaging struct {
-	State  string
-	City   string
-	Year   string
-	Make   string
-	Model  string
-	Trim   string
-	Drive  string
-	Vin    string
-	Color  string
-	Miles  int32
-	Price  string
-	Msrp   string
-	Notes1 *string
-	Notes2 *string
+	State     string
+	City      string
+	Year      string
+	Make      string
+	Model     string
+	Trim      string
+	Drive     string
+	Vin       string
+	Color     string
+	Miles     int32
+	Price     string
+	Msrp      string
+	Notes1    *string
+	Notes2    *string
+	Timestamp pgtype.Timestamp
 }
 
-type Dib struct {
-	Vin       string
-	Queue     []byte
-	UpdatedAt pgtype.Timestamp
+type CityAuctionMap struct {
+	StateCode   string
+	City        string
+	AuctionName string
+}
+
+type Customer struct {
+	CustomerID string
 }

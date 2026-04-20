@@ -62,10 +62,32 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(http.Dir(filepath))))
+	staticFS := http.FileServer(http.Dir("./app"))
+
+	mux.Handle("/app/static/", http.StripPrefix("/app/static/", staticFS))
+
+	mux.HandleFunc("/app/generate_grounded", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./app/generate_grounded.html")
+	})
+
+	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
+	})
+
+	mux.HandleFunc("/app/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/app/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, "./app/index.html")
+	})
+
 	mux.HandleFunc("/api/create_sheet", handlerCreateSheet)
+	mux.HandleFunc("/api/generate_grounded", cfg.handlerGenerateGrounded)
+
 	mux.HandleFunc("/api/display_data", handlerDisplayTable)
 	mux.HandleFunc("/api/displaytestdata", cfg.handlerDisplayTestData)
+
 	mux.HandleFunc("/api/saveToDB", cfg.handlerSaveToDB)
 	mux.HandleFunc("/api/updateAirportCodes", cfg.updateAirportCodes)
 

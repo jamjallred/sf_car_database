@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload CSV</title>
+  </head>
+  <body>
+    <label for="fileInput">Attach file</label>
+    <input id="fileInput" type="file" accept=".csv" hidden />
+
+    <input id="fileName" type="text" readonly placeholder="No file selected" />
+    <button id="selectBtn" type="button">Select file</button>
+    <button id="generateBtn" type="button">Generate grounded sheet</button>
+
+    <script src="/app/static/generate_grounded.js"></script>
+  </body>
+</html>

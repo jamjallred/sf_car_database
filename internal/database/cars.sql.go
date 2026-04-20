@@ -16,7 +16,7 @@ INSERT INTO cars (
 VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
-RETURNING state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, notes1, notes2
+RETURNING state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp
 `
 
 type CreateCarParams struct {
@@ -61,14 +61,13 @@ func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, erro
 		&i.Miles,
 		&i.Price,
 		&i.Msrp,
-		&i.Notes1,
-		&i.Notes2,
+		&i.Timestamp,
 	)
 	return i, err
 }
 
 const getFirstXRows = `-- name: GetFirstXRows :many
-SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, notes1, notes2 FROM cars
+SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp FROM cars
 LIMIT $1
 `
 
@@ -94,8 +93,7 @@ func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error)
 			&i.Miles,
 			&i.Price,
 			&i.Msrp,
-			&i.Notes1,
-			&i.Notes2,
+			&i.Timestamp,
 		); err != nil {
 			return nil, err
 		}
