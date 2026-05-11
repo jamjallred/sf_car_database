@@ -70,6 +70,10 @@ func main() {
 		http.ServeFile(w, r, "./app/generate_grounded.html")
 	})
 
+	mux.HandleFunc("/app/generate_final_report", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./app/generate_final_report.html")
+	})
+
 	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
 	})
@@ -84,6 +88,7 @@ func main() {
 
 	mux.HandleFunc("/api/create_sheet", handlerCreateSheet)
 	mux.HandleFunc("/api/generate_grounded", cfg.handlerGenerateGrounded)
+	mux.HandleFunc("/api/generate_final_report", cfg.handlerGenerateFinalReport)
 
 	mux.HandleFunc("/api/display_data", handlerDisplayTable)
 	mux.HandleFunc("/api/displaytestdata", cfg.handlerDisplayTestData)

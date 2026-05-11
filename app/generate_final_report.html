@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload CSV</title>
+  </head>
+  <body>
+    <p>
+    <label for="dibsInput">Attach dibs sheet:</label>
+    <input id="dibsInput" type="file" accept=".xlsx" hidden />
+
+    <input id="dibsFileName" type="text" readonly placeholder="No file selected" />
+    <button id="dibsSelectBtn" type="button">Select file</button>
+    </p>
+
+    <p>
+    <label for="finalInput">Attach results sheet:</label>
+    <input id="finalInput" type="file" accept=".csv" hidden />
+
+    <input id="finalFileName" type="text" readonly placeholder="No file selected" />
+    <button id="finalSelectBtn" type="button">Select file</button>
+    </p>
+
+    <button id="generateBtn" type="button">Generate final report</button>
+
+    <script src="/app/static/generate_final_report.js"></script>
+  </body>
+</html>

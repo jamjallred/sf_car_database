@@ -40,7 +40,7 @@ CREATE TABLE customers (
 CREATE TABLE cars_customers (
     id SERIAL PRIMARY KEY,
     vin TEXT references cars(vin),
-    customer_id INTEGER REFERENCES customers(customer_id),
+    customer_id TEXT REFERENCES customers(customer_id),
     username TEXT NOT NULL,
     timestamp TIMESTAMP NOT NULL,
     UNIQUE (vin, customer_id)

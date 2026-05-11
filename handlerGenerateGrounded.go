@@ -47,8 +47,8 @@ func (cfg *apiConfig) handlerGenerateGrounded(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	savePath := "/home/fleetdbadmin/workspace/github.com/jamjallred/sf_car_database/assets/" + os.Getenv("FILENAME_PREFIX") + time.Now().Format("2006-01-02") + ".xlsx"
-	excelutils.GenerateGrounded(records, savePath)
+	savePath := os.Getenv("ABSOLUTE_DIRECTORY") + os.Getenv("FILENAME_PREFIX") + time.Now().Format("2006-01-02") + ".xlsx"
+	excelutils.GenerateGrounded(records, savePath, r.Context(), cfg)
 
 	f, err := os.Open(savePath)
 	if err != nil {
