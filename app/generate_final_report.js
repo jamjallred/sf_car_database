@@ -14,11 +14,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
   dibsInput.addEventListener("change", () => {
     const dibsFile = dibsInput.files[0];
-    fileName.value = dibsFile ? dibsFile.name : "No file selected";
+    dibsFileName.value = dibsFile ? dibsFile.name : "No file selected";
   });
   finalInput.addEventListener("change", () => {
     const finalFile = finalInput.files[0];
-    finalFileName = finalFile ? finalFile.name : "No file selected";
+    finalFileName.value = finalFile ? finalFile.name : "No file selected";
   })
 
   generateBtn.addEventListener("click", async () => {

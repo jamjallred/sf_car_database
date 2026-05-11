@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -60,11 +62,29 @@ func (cfg apiConfig) handlerGenerateFinalReport(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	savePath := "/home/fleetdbadmin/workspace/github.com/jamjallred/sf_car_database/assets/" + os.Getenv("FILENAME_PREFIX_FINAL_REPORT") + time.Now().Format("2006-01-02") + ".xlsx"
+	savePath := os.Getenv("ABSOLUTE_DIRECTORY") + os.Getenv("FILENAME_PREFIX_FINAL_REPORT") + time.Now().Format("2006-01-02") + ".xlsx"
+
 	err = excelutils.GenerateFinalReport(csvRecords, xlsxRecords, savePath)
 	if err != nil {
 		fmt.Printf("error generating final report: %v", err)
 		http.Error(w, "error generating final report", http.StatusInternalServerError)
+		return
+	}
+
+	f, err := os.Open(savePath)
+	if err != nil {
+		http.Error(w, ".xlsx file not found", http.StatusInternalServerError)
+	}
+	defer f.Close()
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	downloadName := filepath.Base(savePath)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, downloadName))
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+
+	if _, err := io.Copy(w, f); err != nil {
+		http.Error(w, "failed to send file", http.StatusInternalServerError)
+		return
 	}
 
 }
