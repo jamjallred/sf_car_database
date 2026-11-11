@@ -1,18 +1,32 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upload CSV</title>
-  </head>
-  <body>
-    <label for="fileInput">Attach file:</label>
-    <input id="fileInput" type="file" accept=".csv" hidden />
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grounded sheet · SF Car Database</title>
+  <link rel="stylesheet" href="/app/static/css/app.css">
+  <script src="/app/static/js/common.js" defer></script>
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <main class="narrow">
+    <div class="page-head">
+      <h1>Grounded sheet</h1>
+      <p>Upload the grounded inventory CSV. You'll get back a sorted sheet with each city's auction added where one is mapped.</p>
+    </div>
 
-    <input id="fileName" type="text" readonly placeholder="No file selected" />
-    <button id="selectBtn" type="button">Select file</button>
-    <button id="generateBtn" type="button">Generate grounded sheet</button>
-
-    <script src="/app/static/generate_grounded.js"></script>
-  </body>
+    <form class="card" data-endpoint="/api/generate_grounded" data-busy="Generating…" data-fallback-name="grounded.xlsx" novalidate>
+      <label class="dropzone" data-label="the inventory CSV">
+        <input type="file" name="file" accept=".csv" required>
+        <span class="dz-icon"></span>
+        <span class="dz-text">
+          <span class="dz-title">Drop the grounded inventory CSV here</span>
+          <span class="dz-hint">or click to browse · .csv</span>
+        </span>
+      </label>
+      <div class="actions"><button class="btn" type="submit"><span class="spinner"></span><span class="label">Generate grounded sheet</span></button></div>
+      <div class="status" role="status"></div>
+    </form>
+  </main>
+</body>
 </html>

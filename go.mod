@@ -6,7 +6,6 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/jamjallred/sf_server_utils v0.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/lib/pq v1.10.9
 	github.com/xuri/excelize/v2 v2.10.0
 )
 
