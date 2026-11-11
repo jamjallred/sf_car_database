@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Price check · SF Car Database</title>
+  <link rel="stylesheet" href="/app/static/css/app.css">
+  <script src="/app/static/js/common.js" defer></script>
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <main>
+    <div class="page-head">
+      <h1>Avis price check</h1>
+      <p>Upload the daily export (.csv or .xlsx) to compare each car's price with its listing on <a href="https://www.aviscarsales.com/used-inventory/index.htm" target="_blank" rel="noopener">aviscarsales.com</a>.</p>
+    </div>
+
+    <form class="card" id="check-form" novalidate>
+      <label class="dropzone" data-label="the daily export">
+        <input type="file" name="file" accept=".csv,.xlsx" required>
+        <span class="dz-icon"></span>
+        <span class="dz-text">
+          <span class="dz-title">Drop the daily export here</span>
+          <span class="dz-hint">or click to browse · .csv or .xlsx with a VIN column and a price column</span>
+        </span>
+      </label>
+      <div class="actions">
+        <button class="btn" type="submit"><span class="spinner"></span><span class="label">Compare with Avis</span></button>
+        <button class="btn secondary" id="redownload" type="button"><span class="spinner"></span><span class="label">Re-download Avis prices</span></button>
+        <span class="sub" id="avis-info" style="margin:0"></span>
+      </div>
+      <div class="progress" id="progress" hidden>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <span id="progress-text"></span>
+      </div>
+      <div class="status" role="status"></div>
+    </form>
+
+    <section id="results" hidden>
+      <div class="toolbar" style="margin-top:24px">
+        <div class="chips" id="filters" role="group" aria-label="Show">
+          <button type="button" class="chip active" data-filter="all">All <b id="n-all">0</b></button>
+          <button type="button" class="chip" data-filter="diff">Price differs <b id="n-diff">0</b></button>
+          <button type="button" class="chip" data-filter="same">Same price <b id="n-same">0</b></button>
+          <button type="button" class="chip" data-filter="missing">Not on Avis <b id="n-missing">0</b></button>
+        </div>
+        <input type="search" id="q" placeholder="Filter by VIN, make, model, city…" autocomplete="off">
+        <button class="btn secondary" id="export" type="button">Download CSV</button>
+      </div>
+      <p class="sub legend">
+        <span class="swatch price-high"></span> higher price
+        <span class="swatch price-low"></span> lower price ·
+        Difference = Avis price − sheet price · <span id="source-info"></span>
+      </p>
+      <div class="table-wrap">
+        <table id="compare">
+          <thead>
+            <tr>
+              <th data-key="vin">VIN</th>
+              <th data-key="vehicle">Vehicle</th>
+              <th data-key="location">Location</th>
+              <th data-key="miles" class="num">Miles</th>
+              <th data-key="sheetPrice" class="num">Sheet price</th>
+              <th data-key="avisPrice" class="num">Avis price</th>
+              <th data-key="diff" class="num">Difference</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="/app/static/js/price_check.js" defer></script>
+</body>
+</html>

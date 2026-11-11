@@ -29,6 +29,9 @@ type apiConfig struct {
 
 	// Sales reps credited on the final report (EMPLOYEE_1..EMPLOYEE_N).
 	team []string
+
+	// Avis Car Sales price snapshot for the price check page.
+	avis *avisClient
 }
 
 func main() {
@@ -65,6 +68,12 @@ func main() {
 		finalPrefix:      os.Getenv("FILENAME_PREFIX_FINAL_REPORT"),
 		nationwidePrefix: envOr("FILENAME_PREFIX_NATIONWIDE", "nationwide_"),
 		team:             teamFromEnv(),
+		avis: newAvisClient(
+			envOr("AVIS_BASE_URL", "https://www.aviscarsales.com"),
+			envOr("AVIS_USER_AGENT", "SoonerFleet-PriceCheck/1.0"),
+			durationEnv("AVIS_REQUEST_DELAY", 6*time.Second),
+			durationEnv("AVIS_CACHE_TTL", 6*time.Hour),
+		),
 	}
 
 	server := &http.Server{
@@ -118,6 +127,7 @@ func (cfg *apiConfig) routes() http.Handler {
 	mux.HandleFunc("GET /app/nationwide", page("nationwide.html"))
 	mux.HandleFunc("GET /app/generate_grounded", page("generate_grounded.html"))
 	mux.HandleFunc("GET /app/generate_final_report", page("generate_final_report.html"))
+	mux.HandleFunc("GET /app/price_check", page("price_check.html"))
 	mux.Handle("GET /app/static/", http.StripPrefix("/app/static/", http.FileServer(http.Dir("./app"))))
 
 	// API
@@ -130,6 +140,10 @@ func (cfg *apiConfig) routes() http.Handler {
 	mux.HandleFunc("POST /api/generate_final_report", cfg.handlerGenerateFinalReport)
 	mux.HandleFunc("POST /api/saveToDB", cfg.handlerSaveToDB)
 	mux.HandleFunc("POST /api/updateAirportCodes", cfg.handlerUpdateAirportCodes)
+	mux.HandleFunc("POST /api/price_check/upload", cfg.handlerPriceCheckUpload)
+	mux.HandleFunc("GET /api/avis/status", cfg.handlerAvisStatus)
+	mux.HandleFunc("POST /api/avis/refresh", cfg.handlerAvisRefresh)
+	mux.HandleFunc("POST /api/avis/lookup", cfg.handlerAvisLookup)
 
 	return mux
 }
@@ -152,6 +166,23 @@ func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
+	return fallback
+}
+
+// durationEnv reads a Go duration like "6s" or "6h", or a plain number of
+// seconds, falling back when it's unset or invalid.
+func durationEnv(key string, fallback time.Duration) time.Duration {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	if d, err := time.ParseDuration(v); err == nil && d > 0 {
+		return d
+	}
+	if secs, err := strconv.ParseFloat(v, 64); err == nil && secs > 0 {
+		return time.Duration(secs * float64(time.Second))
+	}
+	log.Printf("ignoring %s=%q (expected something like 6s or 6h)", key, v)
 	return fallback
 }
 

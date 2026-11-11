@@ -15,6 +15,7 @@
     { href: "/app/nationwide", label: "Nationwide" },
     { href: "/app/generate_final_report", label: "Final report" },
     { href: "/app/inventory", label: "Inventory" },
+    { href: "/app/price_check", label: "Price check" },
   ];
 
   const store = {

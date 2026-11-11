@@ -15,6 +15,8 @@
   --err: #c62828;
   --err-soft: #fdecea;
   --warn-soft: #fff6db;
+  --price-high: #fcdcdc;
+  --price-low: #d6f2dd;
   --radius: 10px;
   --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 8%);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -38,6 +40,8 @@
     --err: #ff6b6b;
     --err-soft: #3a1717;
     --warn-soft: #3a3115;
+    --price-high: #4a1f22;
+    --price-low: #173a24;
     --shadow: none;
     color-scheme: dark;
   }
@@ -280,3 +284,29 @@ td.empty { text-align: center; color: var(--muted); padding: 40px; }
   .brand-name, .profile label { display: none; }
   main { padding: 20px 14px 48px; }
 }
+
+/* ---------- price check ---------- */
+
+.progress { display: flex; align-items: center; gap: 12px; margin-top: 16px; font-size: 14px; color: var(--muted); }
+.progress[hidden] { display: none; }
+.progress-track { flex: 0 0 220px; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+}
+.chip b { font-weight: 600; color: var(--muted); margin-left: 4px; }
+.chip:hover { background: var(--surface-2); }
+.chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chip.active b { color: var(--accent); }
+
+td.price-high, .swatch.price-high { background: var(--price-high); }
+td.price-low, .swatch.price-low { background: var(--price-low); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin: 0 4px 0 8px; border: 1px solid var(--border); }
+.swatch:first-child { margin-left: 0; }
+.legend { margin: 0 0 10px; font-size: 13px; }
+.muted { color: var(--muted); }
+#compare th[data-key] { cursor: pointer; user-select: none; }
+#compare td a { font-family: var(--mono); }
