@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nationwide sheet · SF Car Database</title>
+  <link rel="stylesheet" href="/app/static/css/app.css">
+  <script src="/app/static/js/common.js" defer></script>
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <main class="narrow">
+    <div class="page-head">
+      <h1>Nationwide sheet</h1>
+      <p>Upload the in-service inventory export. Duplicate VINs are skipped, and airport codes that aren't in the map are logged to <code>airport_codes_to_update.csv</code>.</p>
+    </div>
+
+    <form class="card" id="generate-form" data-endpoint="/api/create_sheet" data-busy="Generating…" data-fallback-name="nationwide.xlsx" novalidate>
+      <h2>1 · Generate</h2>
+      <p class="sub">In-service export (.xlsx)</p>
+      <label class="dropzone" data-label="the in-service export">
+        <input type="file" name="file" accept=".xlsx" required>
+        <span class="dz-icon"></span>
+        <span class="dz-text">
+          <span class="dz-title">Drop the in-service export here</span>
+          <span class="dz-hint">or click to browse · .xlsx</span>
+        </span>
+      </label>
+      <div class="actions"><button class="btn" type="submit"><span class="spinner"></span><span class="label">Generate nationwide sheet</span></button></div>
+      <div class="status" role="status"></div>
+    </form>
+
+    <form class="card" id="save-form" novalidate>
+      <h2>2 · Save to database</h2>
+      <p class="sub">Adds each car by VIN, or updates it if the VIN is already there. Uses the sheet you just generated, or you can drop a different nationwide sheet below.</p>
+      <label class="dropzone" data-label="a nationwide sheet">
+        <input type="file" name="file" accept=".xlsx">
+        <span class="dz-icon"></span>
+        <span class="dz-text">
+          <span class="dz-title">Drop a nationwide sheet here</span>
+          <span class="dz-hint">optional if you just generated one · .xlsx</span>
+        </span>
+      </label>
+      <div class="actions">
+        <button class="btn" type="submit" disabled><span class="spinner"></span><span class="label">Save to database</span></button>
+        <span class="sub" id="save-source" style="margin:0"></span>
+      </div>
+      <div class="status" role="status"></div>
+    </form>
+  </main>
+  <script src="/app/static/js/nationwide.js" defer></script>
+</body>
+</html>

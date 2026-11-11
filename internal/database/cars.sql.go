@@ -7,30 +7,58 @@ package database
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countCars = `-- name: CountCars :one
+SELECT count(*) FROM cars
+WHERE ($1::text IS NULL
+       OR vin ILIKE '%' || $1::text || '%'
+       OR make ILIKE '%' || $1::text || '%'
+       OR model ILIKE '%' || $1::text || '%'
+       OR city ILIKE '%' || $1::text || '%')
+  AND ($2::text IS NULL OR state = $2::text)
+  AND ($3::text[] IS NULL OR vin = ANY($3::text[]))
+`
+
+type CountCarsParams struct {
+	Search *string
+	State  *string
+	Vins   []string
+}
+
+func (q *Queries) CountCars(ctx context.Context, arg CountCarsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCars, arg.Search, arg.State, arg.Vins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createCar = `-- name: CreateCar :one
 INSERT INTO cars (
-    state, city, year, make, model, drive, vin, color, miles, price, msrp
+    state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
 RETURNING state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp
 `
 
 type CreateCarParams struct {
-	State string
-	City  string
-	Year  string
-	Make  string
-	Model string
-	Drive string
-	Vin   string
-	Color string
-	Miles int32
-	Price int32
-	Msrp  int32
+	State     string
+	City      string
+	Year      string
+	Make      string
+	Model     string
+	Trim      string
+	Drive     string
+	Vin       string
+	Color     string
+	Miles     int32
+	Price     int32
+	Msrp      int32
+	Timestamp pgtype.Timestamp
 }
 
 func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, error) {
@@ -40,12 +68,14 @@ func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, erro
 		arg.Year,
 		arg.Make,
 		arg.Model,
+		arg.Trim,
 		arg.Drive,
 		arg.Vin,
 		arg.Color,
 		arg.Miles,
 		arg.Price,
 		arg.Msrp,
+		arg.Timestamp,
 	)
 	var i Car
 	err := row.Scan(
@@ -103,4 +133,150 @@ func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error)
 		return nil, err
 	}
 	return items, nil
+}
+
+const listStates = `-- name: ListStates :many
+SELECT DISTINCT state FROM cars ORDER BY state
+`
+
+func (q *Queries) ListStates(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listStates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var state string
+		if err := rows.Scan(&state); err != nil {
+			return nil, err
+		}
+		items = append(items, state)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchCars = `-- name: SearchCars :many
+SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp FROM cars
+WHERE ($1::text IS NULL
+       OR vin ILIKE '%' || $1::text || '%'
+       OR make ILIKE '%' || $1::text || '%'
+       OR model ILIKE '%' || $1::text || '%'
+       OR city ILIKE '%' || $1::text || '%')
+  AND ($2::text IS NULL OR state = $2::text)
+  AND ($3::text[] IS NULL OR vin = ANY($3::text[]))
+ORDER BY state, city, year, make, model
+LIMIT $4 OFFSET $5
+`
+
+type SearchCarsParams struct {
+	Search *string
+	State  *string
+	Vins   []string
+	Lim    int32
+	Off    int32
+}
+
+func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, error) {
+	rows, err := q.db.Query(ctx, searchCars,
+		arg.Search,
+		arg.State,
+		arg.Vins,
+		arg.Lim,
+		arg.Off,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Car
+	for rows.Next() {
+		var i Car
+		if err := rows.Scan(
+			&i.State,
+			&i.City,
+			&i.Year,
+			&i.Make,
+			&i.Model,
+			&i.Trim,
+			&i.Drive,
+			&i.Vin,
+			&i.Color,
+			&i.Miles,
+			&i.Price,
+			&i.Msrp,
+			&i.Timestamp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const upsertCar = `-- name: UpsertCar :one
+INSERT INTO cars (
+    state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp
+)
+VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+)
+ON CONFLICT (vin) DO UPDATE SET
+    state = EXCLUDED.state,
+    city = EXCLUDED.city,
+    year = EXCLUDED.year,
+    make = EXCLUDED.make,
+    model = EXCLUDED.model,
+    trim = EXCLUDED.trim,
+    drive = EXCLUDED.drive,
+    color = EXCLUDED.color,
+    miles = EXCLUDED.miles,
+    price = EXCLUDED.price,
+    msrp = EXCLUDED.msrp,
+    timestamp = EXCLUDED.timestamp
+RETURNING (xmax = 0)::boolean AS inserted
+`
+
+type UpsertCarParams struct {
+	State     string
+	City      string
+	Year      string
+	Make      string
+	Model     string
+	Trim      string
+	Drive     string
+	Vin       string
+	Color     string
+	Miles     int32
+	Price     int32
+	Msrp      int32
+	Timestamp pgtype.Timestamp
+}
+
+// Inserts a car or refreshes an existing VIN. Returns true when the row is new.
+func (q *Queries) UpsertCar(ctx context.Context, arg UpsertCarParams) (bool, error) {
+	row := q.db.QueryRow(ctx, upsertCar,
+		arg.State,
+		arg.City,
+		arg.Year,
+		arg.Make,
+		arg.Model,
+		arg.Trim,
+		arg.Drive,
+		arg.Vin,
+		arg.Color,
+		arg.Miles,
+		arg.Price,
+		arg.Msrp,
+		arg.Timestamp,
+	)
+	var inserted bool
+	err := row.Scan(&inserted)
+	return inserted, err
 }

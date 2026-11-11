@@ -1,29 +1,46 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upload CSV</title>
-  </head>
-  <body>
-    <p>
-    <label for="dibsInput">Attach dibs sheet:</label>
-    <input id="dibsInput" type="file" accept=".xlsx" hidden />
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Final report · SF Car Database</title>
+  <link rel="stylesheet" href="/app/static/css/app.css">
+  <script src="/app/static/js/common.js" defer></script>
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <main class="narrow">
+    <div class="page-head">
+      <h1>Final report</h1>
+      <p>Unclaimed cars are removed, and a <strong>FINAL</strong> column shows the rep who closed each car, or <em>MISSED</em> if it went to someone else.</p>
+    </div>
 
-    <input id="dibsFileName" type="text" readonly placeholder="No file selected" />
-    <button id="dibsSelectBtn" type="button">Select file</button>
-    </p>
-
-    <p>
-    <label for="finalInput">Attach results sheet:</label>
-    <input id="finalInput" type="file" accept=".csv" hidden />
-
-    <input id="finalFileName" type="text" readonly placeholder="No file selected" />
-    <button id="finalSelectBtn" type="button">Select file</button>
-    </p>
-
-    <button id="generateBtn" type="button">Generate final report</button>
-
-    <script src="/app/static/generate_final_report.js"></script>
-  </body>
+    <form class="card" data-endpoint="/api/generate_final_report" data-busy="Generating…" data-fallback-name="final_report.xlsx" novalidate>
+      <div class="field-group">
+        <span class="field">Dibs sheet</span>
+      <label class="dropzone" data-label="the dibs sheet">
+        <input type="file" name="dibs" accept=".xlsx" required>
+        <span class="dz-icon"></span>
+        <span class="dz-text">
+          <span class="dz-title">Drop the dibs sheet here</span>
+          <span class="dz-hint">or click to browse · .xlsx</span>
+        </span>
+      </label>
+      </div>
+      <div class="field-group">
+        <span class="field">Auction results</span>
+      <label class="dropzone" data-label="the results CSV">
+        <input type="file" name="initial" accept=".csv" required>
+        <span class="dz-icon"></span>
+        <span class="dz-text">
+          <span class="dz-title">Drop the results CSV here</span>
+          <span class="dz-hint">or click to browse · .csv</span>
+        </span>
+      </label>
+      </div>
+      <div class="actions"><button class="btn" type="submit"><span class="spinner"></span><span class="label">Generate final report</span></button></div>
+      <div class="status" role="status"></div>
+    </form>
+  </main>
+</body>
 </html>

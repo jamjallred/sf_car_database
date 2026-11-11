@@ -1,49 +1,74 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Query Results</title>
-
-  <!-- DataTables CSS -->
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
-
-  <!-- jQuery (required by DataTables) -->
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
-  <!-- DataTables JS -->
-  <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home · SF Car Database</title>
+  <link rel="stylesheet" href="/app/static/css/app.css">
+  <script src="/app/static/js/common.js" defer></script>
 </head>
 <body>
+  <header id="topbar" class="topbar"></header>
+  <main>
+    <div class="page-head">
+      <h1>Dashboard</h1>
+      <p>Build inventory spreadsheets and browse the car database.</p>
+    </div>
 
-  <div id="profile-selector" style="position: absolute; top: 10px; right: 10px;">
-      <label for="username">Select your profile:</label>
-      <select id="username" onchange="saveProfile()">
-          <option value="">-- Choose your name --</option>
-          <option value="Mike">Mike</option>
-          <option value="Stan">Stan</option>
-          <option value="Jaxon">Jaxon</option>
-          <option value="Gregg">Gregg</option>
-      </select>
-      <div id="current-profile" style="margin-top: 5px; font-size: 0.9em; color: #666;">
-        <!--current profile displayed here-->
+    <div class="grid">
+      <a class="card tile" href="/app/generate_grounded">
+        <span class="icon">①</span>
+        <strong>Grounded sheet</strong>
+        <span>Turn the grounded inventory CSV into a sorted sheet with auction names added.</span>
+      </a>
+      <a class="card tile" href="/app/nationwide">
+        <span class="icon">②</span>
+        <strong>Nationwide sheet</strong>
+        <span>Convert the in-service export into the nationwide sheet, then save it to the database.</span>
+      </a>
+      <a class="card tile" href="/app/generate_final_report">
+        <span class="icon">③</span>
+        <strong>Final report</strong>
+        <span>Combine the dibs sheet and auction results to credit each rep.</span>
+      </a>
+      <a class="card tile" href="/app/inventory">
+        <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></span>
+        <strong>Inventory</strong>
+        <span>Search cars in the database by VIN, make, model, city or state.</span>
+      </a>
+    </div>
+
+    <section class="card" style="margin-top:24px">
+      <h2>Maintenance</h2>
+      <p class="sub">Rebuild the airport code map after editing <code>Airport_Codes.xlsx</code>. This also happens on its own when the file changes.</p>
+      <div class="actions" style="margin-top:0">
+        <button class="btn secondary" id="rebuild-codes" type="button"><span class="spinner"></span><span class="label">Rebuild airport codes</span></button>
+        <span id="health" class="sub" style="margin:0"></span>
       </div>
-  </div>
+      <div class="status" id="maint-status"></div>
+    </section>
+  </main>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const btn = document.getElementById("rebuild-codes");
+      const status = document.getElementById("maint-status");
+      btn.addEventListener("click", async () => {
+        SF.setBusy(btn, true, "Rebuilding…");
+        try {
+          const { codes } = await SF.fetchJSON("/api/updateAirportCodes", { method: "POST" });
+          SF.setStatus(status, "ok", `Airport code map rebuilt with ${codes.toLocaleString()} codes.`);
+        } catch (err) {
+          SF.setStatus(status, "err", err.message);
+        } finally {
+          SF.setBusy(btn, false);
+        }
+      });
 
-  <h1>Query Results</h1>
-
-  <label for="pk-input">Primary keys (comma-separated):</label>
-  <input id="pk-input" type="text" placeholder="1,5,12">
-  <button id="load-btn">Load rows</button>
-
-  <table id="results-table" border="1">
-    <thead>
-      <!-- Headers generated automatically here -->
-    </thead>
-    <tbody id="results-body">
-      <!-- rows will be inserted here -->
-    </tbody>
-  </table>
-
-  <script src="/app/static/main.js"></script>
+      const health = document.getElementById("health");
+      SF.fetchJSON("/healthz")
+        .then(() => { health.textContent = "● Database connected"; health.style.color = "var(--ok)"; })
+        .catch(() => { health.textContent = "● Database unreachable"; health.style.color = "var(--err)"; });
+    });
+  </script>
 </body>
 </html>
