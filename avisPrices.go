@@ -43,7 +43,7 @@ var avisPageIDRe = regexp.MustCompile(`"pageId"\s*:\s*"(avisbudget[^"]*AUTO_USED
 // avisListing is one car as listed on aviscarsales.com.
 type avisListing struct {
 	VIN   string `json:"vin"`
-	Price int    `json:"price"` // Avis asking price in whole dollars; 0 = no price shown
+	Price int    `json:"price"` // Avis total price incl. fees, whole dollars; 0 = no price shown
 	Link  string `json:"link"`
 	Title string `json:"title"`
 }
@@ -337,8 +337,9 @@ type avisInventoryResponse struct {
 		Title   json.RawMessage `json:"title"` // ["2025 Jeep", "Compass Latitude"]
 		Pricing struct {
 			DPrice []struct {
-				TypeClass string `json:"typeClass"`
-				Value     string `json:"value"`
+				TypeClass    string `json:"typeClass"`
+				Value        string `json:"value"`
+				IsFinalPrice bool   `json:"isFinalPrice"`
 			} `json:"dprice"`
 		} `json:"pricing"`
 		TrackingPricing map[string]any `json:"trackingPricing"`
@@ -360,23 +361,35 @@ func parseAvisInventory(data []byte) (avisPage, error) {
 		if vin == "" {
 			continue
 		}
-		// The "Avis Price" shown on the site is the askingPrice entry; the
-		// other dprice entries are KBB value, fees and the after-fees total.
-		price := 0
+		// AVIS Retail is the listing's "TOTAL PRICE" (the priceAfterFees
+		// entry, which includes fees). If a listing has no total, use the
+		// "Avis Price" (askingPrice) plus any "Total Fees"; with no fees
+		// listed, the two are the same.
+		var total, asking, fees int
 		for _, d := range v.Pricing.DPrice {
-			if d.TypeClass == "askingPrice" {
-				price = parseDollars(d.Value)
-				break
+			switch {
+			case d.TypeClass == "priceAfterFees" || d.IsFinalPrice:
+				if total == 0 {
+					total = parseDollars(d.Value)
+				}
+			case d.TypeClass == "askingPrice":
+				asking = parseDollars(d.Value)
+			case d.TypeClass == "totalFees":
+				fees = parseDollars(d.Value)
 			}
 		}
-		if price == 0 {
+		if asking == 0 {
 			for _, k := range []string{"salePrice", "internetPrice", "askingPrice"} {
 				if s, ok := v.TrackingPricing[k].(string); ok {
-					if price = parseDollars(s); price > 0 {
+					if asking = parseDollars(s); asking > 0 {
 						break
 					}
 				}
 			}
+		}
+		price := total
+		if price == 0 && asking > 0 {
+			price = asking + fees
 		}
 		link := v.Link
 		if strings.HasPrefix(link, "/") {

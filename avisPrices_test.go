@@ -53,15 +53,16 @@ Disallow: /
 	}
 }
 
-func invItem(vin, asking string) map[string]any {
+func invItem(vin, total string) map[string]any {
 	return map[string]any{
 		"vin":   vin,
 		"link":  "/used/Jeep/2025-Jeep-Compass-" + vin + ".htm",
 		"title": []string{"2025 Jeep", "Compass Latitude"},
 		"pricing": map[string]any{"dprice": []map[string]any{
 			{"typeClass": "wholesalePrice", "value": "$19,810"},
-			{"typeClass": "askingPrice", "value": asking},
-			{"typeClass": "priceAfterFees", "value": "$99,999"},
+			{"typeClass": "askingPrice", "value": "$1,000"},
+			{"typeClass": "totalFees", "value": "$122"},
+			{"typeClass": "priceAfterFees", "value": total, "isFinalPrice": true},
 		}},
 		"trackingPricing": map[string]any{"salePrice": "1"},
 	}
@@ -181,5 +182,29 @@ func TestParsePriceCheckXLSXSkipsSummarySheet(t *testing.T) {
 	}
 	if r := res.Rows[0]; r.SheetPrice != 18100 || r.Year != "2025" || r.Miles != 36509 {
 		t.Errorf("row = %+v", r)
+	}
+}
+
+func TestParseAvisInventoryPrices(t *testing.T) {
+	data := []byte(`{"pageInfo":{"totalCount":3,"pageSize":48},"inventory":[
+	 {"vin":"3c4njdbn5st547225","pricing":{"dprice":[
+	   {"typeClass":"wholesalePrice","value":"$19,810"},
+	   {"typeClass":"AsubBRule","value":"$1,611","isDiscount":true},
+	   {"typeClass":"askingPrice","value":"$18,199"},
+	   {"typeClass":"totalFees","value":"$122"},
+	   {"typeClass":"priceAfterFees","value":"$18,321","isFinalPrice":true}]}},
+	 {"vin":"NOTOTAL0000000001","pricing":{"dprice":[
+	   {"typeClass":"askingPrice","value":"$20,000"},
+	   {"typeClass":"totalFees","value":"$150"}]}},
+	 {"vin":"TRACKONLY00000001","pricing":{"dprice":[]},"trackingPricing":{"salePrice":"17500"}}]}`)
+	page, err := parseAvisInventory(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"3C4NJDBN5ST547225": 18321, "NOTOTAL0000000001": 20150, "TRACKONLY00000001": 17500}
+	for _, l := range page.listings {
+		if l.Price != want[l.VIN] {
+			t.Errorf("%s price = %d, want %d", l.VIN, l.Price, want[l.VIN])
+		}
 	}
 }

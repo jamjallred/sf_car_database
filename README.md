@@ -52,4 +52,4 @@ The price check reads aviscarsales.com's inventory feed (`POST /api/widget/ws-in
 
 Before each download the server re-reads robots.txt. It stops if the rules for `*` disallow the inventory page or the feed, and it uses the site's Crawl-delay if that is longer than ours. It retries a failed page twice with long back-offs, and gives up straight away on 401/403/404.
 
-The Avis price compared is the "Avis Price" shown on the listing (the feed's `askingPrice`), before fees. The sheet price comes from the first of these columns with a value: Sale Price, Buy It Now Price, Price, Asking Price, Internet Price, Opening Price.
+The AVIS Retail price is the listing's "TOTAL PRICE", which includes fees (the feed's `priceAfterFees`). A listing without a total uses its "Avis Price" plus "Total Fees". The sheet price comes from the first of these columns with a value: Sale Price, Buy It Now Price, Price, Asking Price, Internet Price, Opening Price.
