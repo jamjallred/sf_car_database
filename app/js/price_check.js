@@ -247,7 +247,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const s = String(v ?? "");
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const head = ["VIN", "Year", "Make", "Model", "Trim", "City", "State", "Miles", "Sheet Price", "Avis Price", "Difference (Avis - Sheet)", "Status", "Avis Link"];
+    const head = ["VIN", "Year", "Make", "Model", "Trim", "City", "State", "Miles", "AVIS Direct", "AVIS Retail", "Difference (Retail - Direct)", "Status", "Avis Link"];
     const label = { diff: "Price differs", same: "Same price", missing: "Not on Avis" };
     const lines = [head.join(",")].concat(visibleRows().map((r) => [
       r.vin, r.year, r.make, r.model, r.trim, r.city, r.state, r.miles || "",
