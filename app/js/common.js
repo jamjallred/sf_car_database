@@ -184,10 +184,15 @@
         const blob = await resp.blob();
         const filename = filenameFrom(resp, form.dataset.fallbackName || "report.xlsx");
         const summary = resp.headers.get("X-Sheet-Summary");
+        const saveError = resp.headers.get("X-Save-Error"); // the nationwide sheet's database save failed
         download(blob, filename);
 
         const secs = ((performance.now() - started) / 1000).toFixed(1);
-        setStatus(status, "ok", `Downloaded ${filename} (${secs}s).${summary ? " " + summary + "." : ""}`);
+        if (saveError) {
+          setStatus(status, "err", `Downloaded ${filename} (${secs}s), but ${saveError}. Try generating it again.`);
+        } else {
+          setStatus(status, "ok", `Downloaded ${filename} (${secs}s).${summary ? " " + summary + "." : ""}`);
+        }
         form.dispatchEvent(new CustomEvent("sf:generated", { detail: { blob, filename, summary } }));
       } catch (err) {
         setStatus(status, "err", err.message);
@@ -203,5 +208,5 @@
     document.querySelectorAll("form[data-endpoint]").forEach(initGenerateForm);
   });
 
-  window.SF = { fetchJSON, errorMessage, setStatus, setBusy, download, store };
+  window.SF = { fetchJSON, errorMessage, setStatus, setBusy, download, filenameFrom, store };
 })();

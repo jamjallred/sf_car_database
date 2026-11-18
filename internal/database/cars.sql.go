@@ -20,16 +20,23 @@ WHERE ($1::text IS NULL
        OR city ILIKE '%' || $1::text || '%')
   AND ($2::text IS NULL OR state = $2::text)
   AND ($3::text[] IS NULL OR vin = ANY($3::text[]))
+  AND ($4::bigint IS NULL OR last_import_id = $4::bigint)
 `
 
 type CountCarsParams struct {
-	Search *string
-	State  *string
-	Vins   []string
+	Search   *string
+	State    *string
+	Vins     []string
+	ImportID *int64
 }
 
 func (q *Queries) CountCars(ctx context.Context, arg CountCarsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countCars, arg.Search, arg.State, arg.Vins)
+	row := q.db.QueryRow(ctx, countCars,
+		arg.Search,
+		arg.State,
+		arg.Vins,
+		arg.ImportID,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -42,7 +49,7 @@ INSERT INTO cars (
 VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
-RETURNING state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp
+RETURNING state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp, last_import_id
 `
 
 type CreateCarParams struct {
@@ -92,12 +99,13 @@ func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, erro
 		&i.Price,
 		&i.Msrp,
 		&i.Timestamp,
+		&i.LastImportID,
 	)
 	return i, err
 }
 
 const getFirstXRows = `-- name: GetFirstXRows :many
-SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp FROM cars
+SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp, last_import_id FROM cars
 LIMIT $1
 `
 
@@ -124,6 +132,7 @@ func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error)
 			&i.Price,
 			&i.Msrp,
 			&i.Timestamp,
+			&i.LastImportID,
 		); err != nil {
 			return nil, err
 		}
@@ -160,7 +169,7 @@ func (q *Queries) ListStates(ctx context.Context) ([]string, error) {
 }
 
 const searchCars = `-- name: SearchCars :many
-SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp FROM cars
+SELECT state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp, last_import_id FROM cars
 WHERE ($1::text IS NULL
        OR vin ILIKE '%' || $1::text || '%'
        OR make ILIKE '%' || $1::text || '%'
@@ -168,16 +177,18 @@ WHERE ($1::text IS NULL
        OR city ILIKE '%' || $1::text || '%')
   AND ($2::text IS NULL OR state = $2::text)
   AND ($3::text[] IS NULL OR vin = ANY($3::text[]))
+  AND ($4::bigint IS NULL OR last_import_id = $4::bigint)
 ORDER BY state, city, year, make, model
-LIMIT $4 OFFSET $5
+LIMIT $6 OFFSET $5
 `
 
 type SearchCarsParams struct {
-	Search *string
-	State  *string
-	Vins   []string
-	Lim    int32
-	Off    int32
+	Search   *string
+	State    *string
+	Vins     []string
+	ImportID *int64
+	Off      int32
+	Lim      int32
 }
 
 func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, error) {
@@ -185,8 +196,9 @@ func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, 
 		arg.Search,
 		arg.State,
 		arg.Vins,
-		arg.Lim,
+		arg.ImportID,
 		arg.Off,
+		arg.Lim,
 	)
 	if err != nil {
 		return nil, err
@@ -209,6 +221,7 @@ func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, 
 			&i.Price,
 			&i.Msrp,
 			&i.Timestamp,
+			&i.LastImportID,
 		); err != nil {
 			return nil, err
 		}
@@ -222,12 +235,13 @@ func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, 
 
 const upsertCar = `-- name: UpsertCar :one
 INSERT INTO cars (
-    state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp
+    state, city, year, make, model, trim, drive, vin, color, miles, price, msrp, timestamp, last_import_id
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
 ON CONFLICT (vin) DO UPDATE SET
+    last_import_id = EXCLUDED.last_import_id,
     state = EXCLUDED.state,
     city = EXCLUDED.city,
     year = EXCLUDED.year,
@@ -244,19 +258,20 @@ RETURNING (xmax = 0)::boolean AS inserted
 `
 
 type UpsertCarParams struct {
-	State     string
-	City      string
-	Year      string
-	Make      string
-	Model     string
-	Trim      string
-	Drive     string
-	Vin       string
-	Color     string
-	Miles     int32
-	Price     int32
-	Msrp      int32
-	Timestamp pgtype.Timestamp
+	State        string
+	City         string
+	Year         string
+	Make         string
+	Model        string
+	Trim         string
+	Drive        string
+	Vin          string
+	Color        string
+	Miles        int32
+	Price        int32
+	Msrp         int32
+	Timestamp    pgtype.Timestamp
+	LastImportID *int64
 }
 
 // Inserts a car or refreshes an existing VIN. Returns true when the row is new.
@@ -275,6 +290,7 @@ func (q *Queries) UpsertCar(ctx context.Context, arg UpsertCarParams) (bool, err
 		arg.Price,
 		arg.Msrp,
 		arg.Timestamp,
+		arg.LastImportID,
 	)
 	var inserted bool
 	err := row.Scan(&inserted)

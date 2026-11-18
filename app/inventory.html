@@ -4,43 +4,106 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inventory · SF Car Database</title>
-  <link rel="stylesheet" href="/app/static/css/app.css">
-  <script src="/app/static/js/common.js" defer></script>
+  <link rel="stylesheet" href="/app/static/css/app.css?v=2">
+  <script src="/app/static/js/common.js?v=2" defer></script>
 </head>
 <body>
   <header id="topbar" class="topbar"></header>
-  <main>
-    <div class="page-head">
+  <main class="wide">
+    <div class="page-head with-actions">
+      <div class="head-text">
       <h1>Inventory</h1>
-      <p>Search by VIN, make, model or city. To look up exact VINs, paste several separated by commas.</p>
+      <p>The cars on the latest nationwide sheet, in the same column order. Searching or pasting VINs also finds older cars, shown in grey. Tick a name to call dibs on a car, then press <b>Call Dibs</b> to save. Click the <b>Notes</b> tab on the right to show everyone's notes; they save on their own when you leave the cell, and dragging the square in a note's corner copies it down.</p>
+      </div>
+      <button class="btn go" id="all-dibs-btn" type="button" aria-haspopup="dialog" aria-controls="all-dibs" title="Every car on the latest nationwide sheet that someone has dibs on">All Dibs</button>
     </div>
 
     <div class="toolbar">
-      <input type="search" id="q" placeholder="Search VIN, make, model, city…  or paste VIN1, VIN2" autocomplete="off">
+      <input type="search" id="q" placeholder="Search VIN, make, model, city…" autocomplete="off">
       <select id="state"><option value="">All states</option></select>
       <select id="limit">
-        <option value="25">25 / page</option>
-        <option value="50" selected>50 / page</option>
+        <option value="50">50 / page</option>
         <option value="100">100 / page</option>
         <option value="250">250 / page</option>
+        <option value="500">500 / page</option>
+        <option value="all" selected>All on one page</option>
       </select>
+      <label class="check" id="include-old-label" title="Also show cars that weren't on the latest nationwide sheet. A search or pasted VINs always includes them.">
+        <input type="checkbox" id="include-old"> Include older cars
+      </label>
+      <div class="col-menu" id="col-menu">
+        <button class="btn secondary" id="col-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="col-menu-panel" title="Choose which columns to show">Columns</button>
+        <div class="col-menu-panel" id="col-menu-panel" hidden></div>
+      </div>
+      <button class="btn secondary" id="reset-filters" type="button" disabled title="Clear pasted VINs and the search, and show the latest nationwide sheet's cars">Reset filters</button>
       <span class="count" id="count"></span>
     </div>
 
-    <div class="table-wrap">
-      <table id="cars">
-        <thead><tr></tr></thead>
-        <tbody><tr><td class="empty">Loading…</td></tr></tbody>
-      </table>
+    <div class="vin-filter" id="vin-filter">
+      <label class="vin-filter-title" for="vins">Filter by pasted VINs <span class="badge" id="vin-badge" hidden></span></label>
+      <textarea id="vins" rows="4" spellcheck="false" autocomplete="off"
+        placeholder="Paste VINs copied from a spreadsheet or email: one per line, or separated by spaces or commas"></textarea>
+      <div class="vin-actions">
+        <button class="btn secondary" id="vins-clear" type="button">Clear VINs</button>
+        <span class="muted" id="vin-summary"></span>
+      </div>
     </div>
 
-    <div class="pager">
+    <div class="dibs-bar" id="dibs-bar">
+      <span class="legend">
+        Dibs order:
+        <span class="swatch dib-1"></span>1st
+        <span class="swatch dib-2"></span>2nd
+        <span class="swatch dib-3"></span>3rd
+        <span class="swatch dib-4"></span>4th
+      </span>
+      <span class="range-hint" id="range-hint" role="status"></span>
+      <span class="notes-state" id="notes-state" role="status"></span>
+      <button class="link-btn" id="notes-undo" type="button" hidden>Undo</button>
+      <span class="pending-note" id="pending-note"></span>
+      <button class="btn secondary" id="dibs-discard" type="button" hidden>Discard changes</button>
+      <button class="btn" id="dibs-save" type="button" disabled><span class="spinner"></span><span class="label">Call Dibs</span></button>
+    </div>
+    <div class="status" id="inv-status" role="status"></div>
+
+    <div class="inventory-area">
+      <div class="table-wrap inventory-wrap">
+        <table id="cars">
+          <thead><tr></tr></thead>
+          <tbody><tr><td class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="notes-panel" id="notes-panel" hidden>
+        <div class="notes-head" id="notes-head"></div>
+        <div class="notes-body" id="notes-body"><div class="notes-rows" id="notes-rows"></div></div>
+      </div>
+      <button class="notes-flag" id="notes-flag" type="button" aria-controls="notes-panel" aria-expanded="false"><span>Notes</span></button>
+    </div>
+
+    <dialog class="modal" id="all-dibs" aria-labelledby="all-dibs-title">
+      <div class="modal-head">
+        <div>
+          <h2 id="all-dibs-title">All Dibs</h2>
+          <p class="muted" id="all-dibs-sub"></p>
+        </div>
+        <button class="btn" id="all-dibs-export" type="button" disabled><span class="spinner"></span><span class="label">Export .xlsx</span></button>
+        <button class="modal-close" id="all-dibs-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="status" id="all-dibs-status" role="status"></div>
+      <div class="table-wrap modal-table">
+        <table id="all-dibs-table">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </dialog>
+
+    <div class="pager" id="pager">
       <button class="btn secondary" id="prev" type="button">← Prev</button>
       <span id="page-info"></span>
       <button class="btn secondary" id="next" type="button">Next →</button>
     </div>
-    <div class="status" id="inv-status" role="status"></div>
   </main>
-  <script src="/app/static/js/inventory.js" defer></script>
+  <script src="/app/static/js/inventory.js?v=2" defer></script>
 </body>
 </html>

@@ -110,6 +110,7 @@ func (cfg *apiConfig) routes() http.Handler {
 
 	page := func(file string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, r, "./app/"+file)
 		}
 	}
@@ -128,13 +129,17 @@ func (cfg *apiConfig) routes() http.Handler {
 	mux.HandleFunc("GET /app/generate_grounded", page("generate_grounded.html"))
 	mux.HandleFunc("GET /app/generate_final_report", page("generate_final_report.html"))
 	mux.HandleFunc("GET /app/price_check", page("price_check.html"))
-	mux.Handle("GET /app/static/", http.StripPrefix("/app/static/", http.FileServer(http.Dir("./app"))))
+	mux.Handle("GET /app/static/", noCache(http.StripPrefix("/app/static/", http.FileServer(http.Dir("./app")))))
 
 	// API
 	mux.HandleFunc("GET /healthz", cfg.handlerHealth)
 	mux.HandleFunc("GET /api/team", cfg.handlerTeam)
 	mux.HandleFunc("GET /api/cars", cfg.handlerSearchCars)
 	mux.HandleFunc("GET /api/cars/states", cfg.handlerListStates)
+	mux.HandleFunc("POST /api/dibs", cfg.handlerDibs)
+	mux.HandleFunc("GET /api/dibs/all", cfg.handlerAllDibs)
+	mux.HandleFunc("GET /api/dibs/all.xlsx", cfg.handlerAllDibsXLSX)
+	mux.HandleFunc("POST /api/notes", cfg.handlerNotes)
 	mux.HandleFunc("POST /api/create_sheet", cfg.handlerCreateSheet)
 	mux.HandleFunc("POST /api/generate_grounded", cfg.handlerGenerateGrounded)
 	mux.HandleFunc("POST /api/generate_final_report", cfg.handlerGenerateFinalReport)
@@ -146,6 +151,16 @@ func (cfg *apiConfig) routes() http.Handler {
 	mux.HandleFunc("POST /api/avis/lookup", cfg.handlerAvisLookup)
 
 	return mux
+}
+
+// noCache makes browsers check with the server before reusing a cached page,
+// script or stylesheet, so an update shows up on the next load. Unchanged
+// files still come back as a quick 304 Not Modified.
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (cfg *apiConfig) handlerHealth(w http.ResponseWriter, r *http.Request) {

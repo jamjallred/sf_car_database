@@ -9,25 +9,51 @@ import (
 )
 
 type Car struct {
-	State     string
-	City      string
-	Year      string
-	Make      string
-	Model     string
-	Trim      string
-	Drive     string
+	State        string
+	City         string
+	Year         string
+	Make         string
+	Model        string
+	Trim         string
+	Drive        string
+	Vin          string
+	Color        string
+	Miles        int32
+	Price        int32
+	Msrp         int32
+	Timestamp    pgtype.Timestamp
+	LastImportID *int64
+}
+
+type CarDib struct {
+	ID        int64
 	Vin       string
-	Color     string
-	Miles     int32
-	Price     int32
-	Msrp      int32
-	Timestamp pgtype.Timestamp
+	Claimant  string
+	CalledBy  string
+	ClaimedAt pgtype.Timestamp
+}
+
+type CarDibsLog struct {
+	ID       int64
+	Vin      string
+	Claimant string
+	Action   string
+	CalledBy string
+	At       pgtype.Timestamp
+}
+
+type CarNote struct {
+	Vin       string
+	Claimant  string
+	Note      string
+	UpdatedBy string
+	UpdatedAt pgtype.Timestamp
 }
 
 type CarsCustomer struct {
 	ID         int32
 	Vin        *string
-	CustomerID *int32
+	CustomerID *string
 	Username   string
 	Timestamp  pgtype.Timestamp
 }
@@ -58,4 +84,21 @@ type CityAuctionMap struct {
 
 type Customer struct {
 	CustomerID string
+}
+
+type NationwideImport struct {
+	ID        int64
+	CreatedAt pgtype.Timestamp
+	Cars      int32
+	Unmapped  int32
+}
+
+type UnmappedCar struct {
+	Vin         string
+	AirportCode string
+	Fields      []byte
+	Raw         []string
+	ImportID    int64
+	FirstSeen   pgtype.Timestamp
+	LastSeen    pgtype.Timestamp
 }

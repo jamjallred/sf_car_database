@@ -129,13 +129,17 @@ func (cfg *apiConfig) sendWorkbook(w http.ResponseWriter, wb *excelize.File, pre
 	if err := os.WriteFile(archive, buf.Bytes(), 0o644); err != nil {
 		log.Printf("archiving %s: %v", archive, err)
 	}
+	sendXLSX(w, buf.Bytes(), name)
+}
 
+// sendXLSX sends an already serialised workbook as a download.
+func sendXLSX(w http.ResponseWriter, data []byte, name string) {
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
-	w.Header().Set("Content-Length", fmt.Sprint(buf.Len()))
-	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition, X-Sheet-Summary")
+	w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition, X-Sheet-Summary, X-Save-Error")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(buf.Bytes()); err != nil {
+	if _, err := w.Write(data); err != nil {
 		log.Printf("sending %s: %v", name, err)
 	}
 }
