@@ -21,6 +21,7 @@
   --dib-2: #bcd8fb; /* blue */
   --dib-3: #fbe98a; /* yellow */
   --dib-4: #fdc58a; /* orange */
+  --wave: #ddd2fa; /* 2nd Wave ticked: purple */
   --radius: 10px;
   --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 8%);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -50,6 +51,7 @@
     --dib-2: #1d4374;
     --dib-3: #6a5810;
     --dib-4: #7a4012;
+    --wave: #4a3780;
     --shadow: none;
     color-scheme: dark;
   }
@@ -311,7 +313,10 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 #cars td.pin { position: sticky; z-index: 1; }
 #cars td.dib { background: var(--surface); }
 #cars th.dib-head { padding-left: 8px; padding-right: 12px; }
-#cars tbody tr:hover td.dib:not(.dib-1, .dib-2, .dib-3, .dib-4) { background: var(--surface-2); }
+#cars tbody tr:hover td.dib:not(.dib-1, .dib-2, .dib-3, .dib-4, .wave-on) { background: var(--surface-2); }
+#cars td.wave-on, #all-dibs-table td.wave-on { background: var(--wave); }
+#all-dibs-table td.wave-on { --dib-bg: var(--wave); }
+#cars th.wave-head { padding-left: 8px; padding-right: 12px; }
 td.dib input { width: 17px; height: 17px; margin: 9px 14px; cursor: pointer; vertical-align: middle; accent-color: var(--accent); }
 #cars td.dib-1, .swatch.dib-1 { background: var(--dib-1); }
 #cars td.dib-2, .swatch.dib-2 { background: var(--dib-2); }
@@ -516,10 +521,63 @@ dialog.modal::backdrop { background: rgba(15, 20, 25, .45); }
 .modal-close:hover { background: var(--surface-2); color: var(--text); }
 dialog.modal > .status { margin: 12px 20px 0; }
 .modal-table { margin: 16px 20px 20px; overflow: auto; min-height: 120px; }
-#all-dibs-table th { cursor: default; z-index: 1; }
+#all-dibs-table { table-layout: fixed; }
+#all-dibs-table th, #all-dibs-table td { overflow: hidden; text-overflow: ellipsis; }
+#all-dibs-table th { padding-right: 16px; z-index: 1; }
+#all-dibs-table th:not(.sortable) { cursor: pointer; }
+#all-dibs-table th.filler, #all-dibs-table td.filler { padding: 0; cursor: default; }
+#all-dibs-table tbody td.cell-selected { background-color: var(--accent-soft); box-shadow: inset 0 0 0 1px rgb(31 111 235 / 35%); }
 #all-dibs-table td.dib input { cursor: default; pointer-events: none; }
 #all-dibs-table td.dib-1 { background: var(--dib-1); }
 #all-dibs-table td.dib-2 { background: var(--dib-2); }
 #all-dibs-table td.dib-3 { background: var(--dib-3); }
 #all-dibs-table td.dib-4 { background: var(--dib-4); }
-#all-dibs-table td.note { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+#all-dibs-table td.dib { padding: 0; }
+/* A selected dibs cell keeps its order colour, tinted like a selected dibs run. */
+#all-dibs-table tbody td.dib.cell-selected {
+  background-color: var(--dib-bg, var(--surface));
+  background-image: linear-gradient(rgb(31 111 235 / 20%), rgb(31 111 235 / 20%));
+  box-shadow: inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent);
+}
+#all-dibs-table td.dib-1 { --dib-bg: var(--dib-1); }
+#all-dibs-table td.dib-2 { --dib-bg: var(--dib-2); }
+#all-dibs-table td.dib-3 { --dib-bg: var(--dib-3); }
+#all-dibs-table td.dib-4 { --dib-bg: var(--dib-4); }
+
+/* ---------- searchable multi-select (States, Cities) ---------- */
+
+.ms { position: relative; }
+.ms-btn {
+  font: inherit; font-size: 14px; color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px;
+  min-width: 130px; max-width: 260px; padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+}
+.ms-btn:hover { background: var(--surface-2); }
+.ms.has-value .ms-btn { border-color: var(--accent); background: var(--accent-soft); }
+.ms-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.ms-caret { color: var(--muted); font-size: 12px; }
+.ms-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+  width: min(300px, calc(100vw - 32px));
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(16 24 40 / 16%);
+}
+.ms-panel[hidden] { display: none; }
+.ms-search { margin: 10px 10px 6px; }
+.ms-list { max-height: 300px; overflow-y: auto; padding: 2px 4px; }
+.ms-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.ms-opt input { accent-color: var(--accent); margin: 0; pointer-events: none; }
+.ms-opt.active { background: var(--surface-2); }
+.ms-opt:hover { background: var(--surface-2); }
+.ms-hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+.ms-empty { padding: 10px 8px; color: var(--muted); font-size: 14px; }
+.ms-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted);
+}
+.ms-clear:disabled { color: var(--muted); cursor: default; text-decoration: none; opacity: .6; }

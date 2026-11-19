@@ -22,12 +22,13 @@ Internal Go web app for building inventory spreadsheets and browsing the car dat
 | `POST` | `/api/generate_final_report` | multipart `dibs` (.xlsx) + `initial` (.csv) |
 | `POST` | `/api/saveToDB` | multipart `file` (nationwide .xlsx) or raw body → `{inserted, updated, skipped}` (re-saves an existing sheet; the page no longer uses it) |
 | `POST` | `/api/updateAirportCodes` | — → `{codes}` |
-| `GET` | `/api/cars` | `q`, `state`, `vins` (split on commas, semicolons or whitespace), `scope` (`latest` default, or `all`), `limit` (number or `all`), `offset` → cars with their `dibs` (oldest first), `notes` and `inLatest`, plus the `latest` import |
+| `GET` | `/api/cars` | `q`, `state` and `city` (each may repeat, any matches; a city is `ST\|City`), `vins` (split on commas, semicolons or whitespace), `scope` (`latest` default, or `all`), `limit` (number or `all`), `offset` → cars with their `dibs` (oldest first), `notes` and `inLatest`, plus the `latest` import |
 | `POST` | `/api/notes` | JSON `{updatedBy, changes: [{vin, name, note}]}` (empty note deletes) → `{notes}` |
-| `POST` | `/api/dibs` | JSON `{calledBy, changes: [{vin, name, claim}]}` → `{claimed, released, dibs}` |
+| `POST` | `/api/dibs` | JSON `{calledBy, changes: [{vin, name, claim}]}` (`name` is a dibs column or `2nd Wave`) → `{claimed, released, waveSet, waveCleared, dibs, wave}` |
 | `GET` | `/api/dibs/all` | Cars on the latest nationwide sheet with an active dibs → `{cars, dibsNames, latest}` |
 | `GET` | `/api/dibs/all.xlsx?tz=` | The same cars as a workbook (dibs as TRUE/FALSE; `tz`, e.g. `America/Chicago`, sets the filename's date) |
 | `GET` | `/api/cars/states` | — |
+| `GET` | `/api/cars/cities` | — → `{cities: [{state, city}]}` |
 | `GET` | `/api/team` | — |
 | `POST` | `/api/price_check/upload` | multipart `file` (.csv or .xlsx) → `{rows, priceColumn, duplicates}` |
 | `GET` | `/api/avis/status` | — → download progress and snapshot age |
@@ -67,9 +68,13 @@ The inventory page has a checkbox column for each name in `dibsNames` (`handlerD
 
 To tick many boxes at once, drag down a dibs column, Shift+click a second box, or click the column's heading to select every box shown, then press Space. Space unticks them instead if they're all ticked already, and Esc clears the selection. These are still unsaved changes until Call Dibs. Only the box itself changes a tick: clicking the rest of the cell selects that one box.
 
+**2nd Wave** is a checkbox column right after MSRP, on the main table and in the All Dibs pop-up and its export. It works like a dibs column: tick or untick boxes, select a run and press Space, and save with Call Dibs. It isn't pinned, has no order colours (a ticked cell is purple), and doesn't count as a dibs, so it doesn't put a car in All Dibs. Ticked cars are kept in `car_second_wave`, with who ticked them and when. Every tick and untick is logged in `car_dibs_log` with claimant `2nd Wave`. It can be hidden from the Columns menu like any other column.
+
 For every kind of selection (dibs boxes, notes, car details), clicking anywhere other than a highlighted cell clears it. Clicking inside the selection keeps it, and dragging from there starts a new one. Shift+click extends it, and scrollbars and column resizing leave it alone. To edit a note inside a selected run, double-click it.
 
 **All Dibs** (top right of the page) opens a pop-up listing every car on the latest nationwide sheet that has at least one saved dibs. It shows all columns, including any hidden in the Columns menu: the car details, each person's dibs (a read-only tick, coloured by order) and their notes. **Export .xlsx** downloads the same list as `all_dibs_YYYY-MM-DD.xlsx`, with each dibs cell TRUE or FALSE and the claimed ones coloured. Unsaved ticks aren't included, and exports aren't archived in `ABSOLUTE_DIRECTORY`.
+
+The pop-up's table works like the main one but is read-only. Click a heading to sort, or a dibs or notes heading to select that column. Drag a column edge to resize it (double-click the edge to reset). The pop-up keeps its own widths (`inventory.allDibsColWidths`), starting from the main table's. Click, drag or Shift+click cells to select them; holding near an edge while dragging scrolls. Ctrl+C copies the selection, with dibs as TRUE/FALSE. A click outside the selection, or Esc, clears it; a second Esc closes the pop-up.
 
 A car's dibs are coloured in the order they were called: 1st green, 2nd blue, 3rd yellow, 4th orange. Re-saving a box that's already ticked keeps its original time, and releasing a dibs moves the later ones up a place.
 

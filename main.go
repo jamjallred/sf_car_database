@@ -136,6 +136,7 @@ func (cfg *apiConfig) routes() http.Handler {
 	mux.HandleFunc("GET /api/team", cfg.handlerTeam)
 	mux.HandleFunc("GET /api/cars", cfg.handlerSearchCars)
 	mux.HandleFunc("GET /api/cars/states", cfg.handlerListStates)
+	mux.HandleFunc("GET /api/cars/cities", cfg.handlerListCities)
 	mux.HandleFunc("POST /api/dibs", cfg.handlerDibs)
 	mux.HandleFunc("GET /api/dibs/all", cfg.handlerAllDibs)
 	mux.HandleFunc("GET /api/dibs/all.xlsx", cfg.handlerAllDibsXLSX)

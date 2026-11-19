@@ -15,3 +15,13 @@ func TestSplitVINs(t *testing.T) {
 		t.Fatalf("splitVINs(blank) = %v, want nil", got)
 	}
 }
+
+func TestCleanList(t *testing.T) {
+	got := cleanList([]string{" OK", "", "TX", "OK", "  "})
+	if len(got) != 2 || got[0] != "OK" || got[1] != "TX" {
+		t.Fatalf("cleanList = %q", got)
+	}
+	if cleanList(nil) != nil || cleanList([]string{" "}) != nil {
+		t.Fatal("blank lists should be nil")
+	}
+}

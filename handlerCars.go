@@ -28,6 +28,7 @@ type carJSON struct {
 	Price     int32             `json:"price"`
 	MSRP      int32             `json:"msrp"`
 	UpdatedAt *time.Time        `json:"updatedAt,omitempty"`
+	Wave      *waveJSON         `json:"wave"`     // 2nd Wave tick, or null
 	Dibs      []dibJSON         `json:"dibs"`     // oldest first
 	Notes     map[string]string `json:"notes"`    // person → note
 	InLatest  bool              `json:"inLatest"` // on the most recent nationwide sheet
@@ -45,6 +46,7 @@ type carsPage struct {
 	Limit     int32     `json:"limit"`
 	Offset    int32     `json:"offset"`
 	DibsNames []string  `json:"dibsNames"`
+	WaveName  string    `json:"waveName"`
 	// The most recent nationwide sheet saved, and whether this page is limited
 	// to its cars ("latest") or includes older ones ("all").
 	Latest *importJSON `json:"latest,omitempty"`
@@ -53,10 +55,11 @@ type carsPage struct {
 	NotFound []string `json:"notFound,omitempty"`
 }
 
-// GET /api/cars?q=&state=&vins=A,B&scope=latest&limit=50&offset=0
+// GET /api/cars?q=&state=OK&state=TX&city=OK|Tulsa&vins=A,B&scope=latest&limit=50&offset=0
 //
 // q matches VIN, make, model or city (case-insensitive substring). vins is an
-// exact VIN list separated by commas, semicolons or whitespace. A q containing
+// exact VIN list separated by commas, semicolons or whitespace. state and
+// city may repeat (any of them matches); a city is "ST|City". A q containing
 // commas is treated as vins. limit=all returns every matching car.
 //
 // Without a search (q or vins), only the cars of the most recent nationwide
@@ -92,8 +95,9 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 
 	filter := database.CountCarsParams{
 		Search:   optional(search),
-		State:    optional(strings.TrimSpace(qs.Get("state"))),
-		Vins:     vins, // nil means "no VIN filter"
+		States:   cleanList(qs["state"]),
+		Places:   cleanList(qs["city"]), // "ST|City"
+		Vins:     vins,                  // nil means "no VIN filter"
 		ImportID: importID,
 	}
 
@@ -104,7 +108,8 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 	}
 	cars, err := cfg.dbQueries.SearchCars(ctx, database.SearchCarsParams{
 		Search:   filter.Search,
-		State:    filter.State,
+		States:   filter.States,
+		Places:   filter.Places,
 		Vins:     filter.Vins,
 		ImportID: filter.ImportID,
 		Lim:      limit,
@@ -129,10 +134,15 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 		respondErr(w, r, err, "could not load notes")
 		return
 	}
+	waves, err := waveFor(ctx, cfg.dbQueries, pageVINs)
+	if err != nil {
+		respondErr(w, r, err, "could not load 2nd Wave ticks")
+		return
+	}
 
 	page := carsPage{
 		Cars: make([]carJSON, 0, len(cars)), Total: total, Limit: limit, Offset: offset,
-		DibsNames: dibsNames, Latest: latest, Scope: scope,
+		DibsNames: dibsNames, WaveName: waveName, Latest: latest, Scope: scope,
 	}
 	if len(vins) > 0 {
 		existing, err := cfg.dbQueries.ExistingVins(ctx, vins)
@@ -151,7 +161,9 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	for _, c := range cars {
-		page.Cars = append(page.Cars, toCarJSON(c, dibs[c.Vin], notes[c.Vin], latest))
+		cj := toCarJSON(c, dibs[c.Vin], notes[c.Vin], latest)
+		cj.Wave = waves[c.Vin]
+		page.Cars = append(page.Cars, cj)
 	}
 	writeJSON(w, http.StatusOK, page)
 }
@@ -201,6 +213,39 @@ func (cfg *apiConfig) handlerListStates(w http.ResponseWriter, r *http.Request) 
 		states = []string{}
 	}
 	writeJSON(w, http.StatusOK, map[string][]string{"states": states})
+}
+
+// GET /api/cars/cities — every city with cars, with its state, for the
+// city filter: {cities: [{state, city}]}, ordered by city then state.
+func (cfg *apiConfig) handlerListCities(w http.ResponseWriter, r *http.Request) {
+	rows, err := cfg.dbQueries.ListCities(r.Context())
+	if err != nil {
+		respondErr(w, r, err, "could not load cities")
+		return
+	}
+	type place struct {
+		State string `json:"state"`
+		City  string `json:"city"`
+	}
+	out := make([]place, len(rows))
+	for i, p := range rows {
+		out[i] = place{p.State, p.City}
+	}
+	writeJSON(w, http.StatusOK, map[string][]place{"cities": out})
+}
+
+// cleanList trims repeated query values and drops blanks and duplicates. An
+// empty result is nil, meaning "no filter".
+func cleanList(vals []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, v := range vals {
+		if v = strings.TrimSpace(v); v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // splitVINs splits a pasted VIN list on commas, semicolons and whitespace,

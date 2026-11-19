@@ -22,7 +22,12 @@ document.addEventListener("DOMContentLoaded", () => {
     { key: "price", label: "Price", num: true, fmt: money, w: 100 },
     { key: "msrp", label: "MSRP", num: true, fmt: money, w: 100 },
   ];
-  const DIB_WIDTH = 76, NOTE_WIDTH = 130, MIN_WIDTH = 44;
+  const DIB_WIDTH = 76, NOTE_WIDTH = 130, MIN_WIDTH = 44, WAVE_WIDTH = 96;
+  // The "2nd Wave" checkbox column, after MSRP. It works like a dibs column
+  // (saved with Call Dibs, range selection, Space) but has no order colours
+  // and isn't pinned. Its width and Columns-menu key is "wave".
+  const WAVE = "2nd Wave";
+  const dibKey = (name) => (name === WAVE ? "wave" : "dib:" + name);
   const WIDTHS_KEY = "inventory.colWidths"; // localStorage, so widths outlive the tab
   const FILTERS_KEY = "inventory.filters"; // sessionStorage, so filters survive a refresh
   const NOTES_OPEN_KEY = "inventory.notesOpen"; // localStorage: is the notes panel out?
@@ -31,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const OVERSCAN = 15; // rows drawn above and below the visible ones
 
   const $ = (id) => document.getElementById(id);
-  const q = $("q"), stateSel = $("state"), limitSel = $("limit");
+  const q = $("q"), limitSel = $("limit");
   const vinBox = $("vins"), vinBadge = $("vin-badge"), vinSummary = $("vin-summary");
   const table = $("cars");
   const wrap = table.parentElement;
@@ -93,21 +98,188 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  // ---------- searchable multi-select dropdowns (States, Cities) ----------
+  // A button that opens a panel with a search box and a ticked list. Nothing
+  // ticked means "all". Arrow keys move through the list, Enter or Space
+  // ticks, Esc closes. onChange runs after every tick.
+
+  function multiSelect(root, { noun, plural, onChange }) {
+    root.classList.add("ms");
+    root.innerHTML = `
+      <button type="button" class="ms-btn" aria-haspopup="listbox" aria-expanded="false">
+        <span class="ms-text"></span><span class="ms-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="ms-panel" hidden>
+        <input type="search" class="ms-search" autocomplete="off" spellcheck="false">
+        <div class="ms-list" role="listbox" aria-multiselectable="true"></div>
+        <div class="ms-foot"><span class="ms-count"></span><button type="button" class="link-btn ms-clear">Clear</button></div>
+      </div>`;
+    const btn = root.querySelector(".ms-btn"), text = root.querySelector(".ms-text");
+    const panel = root.querySelector(".ms-panel"), search = root.querySelector(".ms-search");
+    const list = root.querySelector(".ms-list"), countEl = root.querySelector(".ms-count");
+    const clearBtn = root.querySelector(".ms-clear");
+    search.placeholder = `Search ${plural}…`;
+    search.setAttribute("aria-label", `Search ${plural}`);
+    btn.title = `Filter by ${noun}: tick one or more`;
+
+    let options = []; // {value, label, hint}
+    const selected = new Set();
+    let shownOpts = [], active = -1;
+
+    function updateButton() {
+      const labels = options.filter((o) => selected.has(o.value)).map((o) => o.short || o.label);
+      text.textContent = !labels.length ? `All ${plural}`
+        : labels.length <= 2 ? labels.join(", ") : `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
+      root.classList.toggle("has-value", labels.length > 0);
+      btn.title = labels.length ? `${labels.length} ${labels.length === 1 ? noun : plural}: ${labels.join(", ")}` : `Filter by ${noun}: tick one or more`;
+      countEl.textContent = labels.length ? `${labels.length} selected` : `${options.length.toLocaleString()} ${plural}`;
+      clearBtn.disabled = !labels.length;
+    }
+
+    function renderList() {
+      const term = search.value.trim().toLowerCase();
+      shownOpts = term ? options.filter((o) => (o.label + " " + (o.hint || "")).toLowerCase().includes(term)) : options;
+      const frag = document.createDocumentFragment();
+      shownOpts.forEach((o, i) => {
+        const row = frag.appendChild(document.createElement("label"));
+        row.className = "ms-opt";
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", String(selected.has(o.value)));
+        row.dataset.i = i;
+        const box = row.appendChild(document.createElement("input"));
+        box.type = "checkbox";
+        box.tabIndex = -1;
+        box.checked = selected.has(o.value);
+        row.appendChild(document.createElement("span")).textContent = o.label;
+        if (o.hint) {
+          const h = row.appendChild(document.createElement("span"));
+          h.className = "ms-hint";
+          h.textContent = o.hint;
+        }
+      });
+      if (!shownOpts.length) {
+        const none = frag.appendChild(document.createElement("div"));
+        none.className = "ms-empty";
+        none.textContent = options.length ? `No ${plural} match "${search.value.trim()}"` : `No ${plural} to choose from`;
+      }
+      list.replaceChildren(frag);
+      setActive(shownOpts.length ? Math.min(Math.max(active, 0), shownOpts.length - 1) : -1);
+    }
+
+    function setActive(i) {
+      list.querySelector(".ms-opt.active")?.classList.remove("active");
+      active = i;
+      const row = list.children[i];
+      if (row?.classList.contains("ms-opt")) {
+        row.classList.add("active");
+        row.scrollIntoView({ block: "nearest" });
+      }
+    }
+
+    function toggle(i) {
+      const o = shownOpts[i];
+      if (!o) return;
+      if (selected.has(o.value)) selected.delete(o.value);
+      else selected.add(o.value);
+      const row = list.children[i];
+      row.querySelector("input").checked = selected.has(o.value);
+      row.setAttribute("aria-selected", String(selected.has(o.value)));
+      updateButton();
+      onChange();
+    }
+
+    function setOpen(open) {
+      if (open === !panel.hidden) return;
+      panel.hidden = !open;
+      btn.setAttribute("aria-expanded", String(open));
+      if (open) {
+        search.value = "";
+        active = 0;
+        renderList();
+        search.focus();
+      }
+    }
+
+    btn.addEventListener("click", () => setOpen(panel.hidden));
+    search.addEventListener("input", () => { active = 0; renderList(); });
+    list.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the search box
+    list.addEventListener("click", (e) => {
+      const row = e.target.closest(".ms-opt");
+      if (!row) return;
+      e.preventDefault(); // we toggle the box ourselves
+      setActive(Number(row.dataset.i));
+      toggle(Number(row.dataset.i));
+    });
+    root.addEventListener("keydown", (e) => {
+      if (panel.hidden) {
+        if (e.key === "ArrowDown" && e.target === btn) { e.preventDefault(); setOpen(true); }
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (shownOpts.length) setActive((active + (e.key === "ArrowDown" ? 1 : shownOpts.length - 1)) % shownOpts.length);
+      } else if (e.key === "Enter" || (e.key === " " && e.target !== search)) {
+        e.preventDefault();
+        toggle(active);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+        btn.focus();
+      } else if (e.key === "Tab") {
+        setOpen(false);
+      }
+    });
+    clearBtn.addEventListener("click", () => {
+      if (!selected.size) return;
+      selected.clear();
+      renderList();
+      updateButton();
+      onChange();
+      search.focus();
+    });
+    document.addEventListener("mousedown", (e) => {
+      if (!panel.hidden && !root.contains(e.target)) setOpen(false);
+    });
+
+    updateButton();
+    return {
+      get values() { return options.filter((o) => selected.has(o.value)).map((o) => o.value); },
+      // Replaces the choices; ticked values that are no longer offered are dropped.
+      setOptions(opts) {
+        options = opts;
+        const offered = new Set(opts.map((o) => o.value));
+        for (const v of [...selected]) if (!offered.has(v)) selected.delete(v);
+        if (!panel.hidden) renderList();
+        updateButton();
+      },
+      setValues(vals) {
+        selected.clear();
+        const offered = new Set(options.map((o) => o.value));
+        for (const v of vals || []) if (offered.has(v)) selected.add(v);
+        if (!panel.hidden) renderList();
+        updateButton();
+      },
+    };
+  }
+
   // ---------- filters ----------
   // Saved for this browser tab after a short pause in typing (and straight
   // away when the page unloads), so a refresh shows the same cars. A link with
   // ?q=/state=/limit= overrides the saved search, state and page size.
 
-  const DEFAULTS = { q: "", state: "", limit: "all", offset: 0, vins: "", old: false, sort: { key: null, dir: 1 } };
+  const DEFAULTS = { q: "", states: [], cities: [], limit: "all", offset: 0, vins: "", old: false, sort: { key: null, dir: 1 } };
 
   function loadFilters() {
     let saved = {};
     try { saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY)) || {}; } catch { /* none saved */ }
     const f = { ...DEFAULTS, ...saved };
+    if (typeof saved.state === "string") f.states = saved.state ? [saved.state] : []; // saved before multi-select
     const params = new URLSearchParams(location.search);
-    if (["q", "state", "limit", "offset", "scope"].some((k) => params.has(k))) {
+    if (["q", "state", "city", "limit", "offset", "scope"].some((k) => params.has(k))) {
       f.q = params.get("q") || "";
-      f.state = params.get("state") || "";
+      f.states = params.getAll("state").filter(Boolean);
+      f.cities = params.getAll("city").filter(Boolean);
       f.limit = params.get("limit") || "all";
       f.offset = Number(params.get("offset")) || 0;
       f.old = params.get("scope") === "all";
@@ -115,29 +287,51 @@ document.addEventListener("DOMContentLoaded", () => {
     return f;
   }
 
-  // The search, state and page size as URL parameters (pasted VINs are too long).
+  // The search, states, cities and page size as URL parameters (pasted VINs are too long).
   function filterParams() {
     const p = new URLSearchParams();
     if (q.value.trim()) p.set("q", q.value.trim());
-    if (stateSel.value) p.set("state", stateSel.value);
+    for (const st of stateFilter.values) p.append("state", st);
+    for (const c of cityFilter.values) p.append("city", c);
     p.set("limit", limitSel.value);
     if (includeOld.checked) p.set("scope", "all");
     if (offset && limitSel.value !== "all") p.set("offset", offset);
     return p;
   }
 
-  let restored = false; // until the state list has loaded, stateSel can't show the saved state yet
+  let restored = false; // until the state and city lists have loaded, the saved choices can't be shown yet
   function saveFiltersNow() {
     if (!restored) return;
     history.replaceState(null, "", "?" + filterParams().toString());
-    const f = { q: q.value, state: stateSel.value, limit: limitSel.value, offset, vins: vinBox.value, old: includeOld.checked, sort };
+    const f = {
+      q: q.value, states: stateFilter.values, cities: cityFilter.values,
+      limit: limitSel.value, offset, vins: vinBox.value, old: includeOld.checked, sort,
+    };
     try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify(f)); } catch { /* private mode */ }
-    resetBtn.disabled = !q.value.trim() && !stateSel.value && limitSel.value === DEFAULTS.limit &&
+    resetBtn.disabled = !q.value.trim() && !stateFilter.values.length && !cityFilter.values.length && limitSel.value === DEFAULTS.limit &&
       !vinBox.value.trim() && !sort.key && !includeOld.checked;
   }
   const saveFilters = debounced(saveFiltersNow, 400);
 
   const initial = loadFilters();
+
+  // States and Cities: ticking states narrows the city list to those states
+  // (cities ticked in other states are dropped); with no state ticked, every
+  // city is listed.
+  let allCities = []; // [{state, city}]
+  const filtersSoon = debounced(() => reload(), 350);
+  const onFilterChange = () => { saveFilters(); filtersSoon(); };
+  const cityFilter = multiSelect($("city-filter"), { noun: "city", plural: "cities", onChange: onFilterChange });
+  const stateFilter = multiSelect($("state-filter"), {
+    noun: "state", plural: "states",
+    onChange: () => { updateCityOptions(); onFilterChange(); },
+  });
+  function updateCityOptions() {
+    const states = new Set(stateFilter.values);
+    cityFilter.setOptions(allCities
+      .filter((p) => !states.size || states.has(p.state))
+      .map((p) => ({ value: p.state + "|" + p.city, label: p.city, hint: p.state, short: `${p.city}, ${p.state}` })));
+  }
   q.value = initial.q;
   limitSel.value = initial.limit;
   if (!limitSel.value) limitSel.value = DEFAULTS.limit;
@@ -206,10 +400,15 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
   }
 
+  // Which widths a grip edits: the main table's by default (the All Dibs
+  // pop-up passes its own).
+  const mainSizing = { widths, apply: () => applyWidths(), applySoon: applyWidthsSoon, save: saveWidths };
+
   // The grip sits on the column's right edge, or on its left edge (fromLeft)
   // for the notes panel, which grows leftwards. `sized` is the element whose
   // width is the column's width.
-  function addResizer(th, key, { sized = th, fromLeft = false } = {}) {
+  function addResizer(th, key, { sized = th, fromLeft = false, sizing = mainSizing } = {}) {
+    const { widths, apply: applyWidths, applySoon: applyWidthsSoon, save: saveWidths } = sizing;
     const grip = document.createElement("span");
     grip.className = "col-resizer" + (fromLeft ? " left" : "");
     grip.title = "Drag to resize · double-click to reset";
@@ -269,6 +468,16 @@ document.addEventListener("DOMContentLoaded", () => {
       addCol(col.key, col.w);
     }
 
+    const waveTh = document.createElement("th");
+    waveTh.scope = "col";
+    waveTh.className = "dib-head wave-head";
+    waveTh.appendChild(document.createElement("span")).textContent = WAVE;
+    waveTh.title = `Select every ${WAVE} box shown, then press Space to tick them`;
+    waveTh.addEventListener("click", () => selectDibColumn(WAVE));
+    addResizer(waveTh, "wave");
+    thead.appendChild(waveTh);
+    addCol("wave", WAVE_WIDTH);
+
     const filler = document.createElement("th");
     filler.className = "filler";
     filler.setAttribute("aria-hidden", "true");
@@ -319,7 +528,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function cellPosition(key) {
     const i = COLUMNS.findIndex((c) => c.key === key);
     if (i >= 0) return i + 1;
-    return COLUMNS.length + 2 + dibsNames.indexOf(key.split(":")[1]);
+    if (key === "wave") return COLUMNS.length + 1;
+    return COLUMNS.length + 3 + dibsNames.indexOf(key.split(":")[1]);
   }
 
   function applyColumns() {
@@ -346,7 +556,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // No notes columns showing: no Notes tab either.
     notesFlag.hidden = !firstNote;
     if (!firstNote && notesOpen) setNotesOpen(false);
-    if (range && !shown("dib:" + range.name)) setRange(null);
+    if (range && !shown(dibKey(range.name))) setRange(null);
     if (noteRange && !shown("note:" + noteRange.name)) setNoteRange(null);
     applyWidths();
   }
@@ -357,7 +567,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function buildColumnMenu() {
     const groups = [
-      { title: "Car details", cols: COLUMNS.map((c) => ({ key: c.key, label: c.label })) },
+      { title: "Car details", cols: [...COLUMNS.map((c) => ({ key: c.key, label: c.label })), { key: "wave", label: WAVE }] },
       { title: "Dibs", cols: dibsNames.map((name) => ({ key: "dib:" + name, label: name })) },
       { title: "Notes", cols: dibsNames.map((name) => ({ key: "note:" + name, label: name + " Notes" })) },
     ];
@@ -416,7 +626,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------- dibs state ----------
 
   function hasSavedDib(car, name) {
-    return car.dibs.some((d) => d.name === name);
+    return name === WAVE ? !!car.wave : car.dibs.some((d) => d.name === name);
   }
 
   function isChecked(car, name) {
@@ -440,6 +650,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // Colours the cell by when this person's dibs was saved, relative to the
   // car's other dibs: 1st green, 2nd blue, 3rd yellow, 4th orange.
   function paintDibCell(td, car, name) {
+    if (name === WAVE) {
+      td.className = "dib wave" + (car.wave ? " wave-on" : "");
+      if (inRange(range, idxOf.get(car.vin), name)) td.classList.add("range-selected");
+      td.title = car.wave ? `${WAVE}: ticked ${new Date(car.wave.at).toLocaleString()}${car.wave.by ? ` by ${car.wave.by}` : ""}` : `Tick for ${WAVE}`;
+      const p = pending.get(keyOf(car.vin, name));
+      if (p) {
+        td.classList.add("pending");
+        td.title += p.claim ? " (not saved yet)" : " (untick not saved yet)";
+      }
+      return;
+    }
     const idx = car.dibs.findIndex((d) => d.name === name);
     td.className = "dib pin";
     if (inRange(range, idxOf.get(car.vin), name)) td.classList.add("range-selected");
@@ -479,15 +700,18 @@ document.addEventListener("DOMContentLoaded", () => {
       tr.appendChild(td);
     }
     if (cellRange) paintCellRow(tr, idxOf.get(car.vin));
-    tr.appendChild(document.createElement("td")).className = "filler";
-    for (const name of dibsNames) {
+    for (const name of [WAVE, null, ...dibsNames]) {
+      if (name === null) {
+        tr.appendChild(document.createElement("td")).className = "filler";
+        continue;
+      }
       const td = document.createElement("td");
       td.dataset.name = name;
       const box = td.appendChild(document.createElement("input"));
       box.type = "checkbox";
       box.dataset.name = name;
       box.checked = isChecked(car, name);
-      box.setAttribute("aria-label", `${name} dibs on ${car.vin}`);
+      box.setAttribute("aria-label", name === WAVE ? `${WAVE} for ${car.vin}` : `${name} dibs on ${car.vin}`);
       paintDibCell(td, car, name);
       tr.appendChild(td);
     }
@@ -700,8 +924,8 @@ document.addEventListener("DOMContentLoaded", () => {
       drawNotes(true);
       const td = document.createElement("td");
       td.className = "empty";
-      td.colSpan = COLUMNS.length + 1 + dibsNames.length;
-      const filtered = q.value.trim() || stateSel.value || parseVINs(vinBox.value).length;
+      td.colSpan = COLUMNS.length + 2 + dibsNames.length; // + 2nd Wave and the filler
+      const filtered = q.value.trim() || stateFilter.values.length || cityFilter.values.length || parseVINs(vinBox.value).length;
       td.textContent = filtered ? "No cars match those filters." : "No cars in the database yet.";
       const tr = document.createElement("tr");
       tr.appendChild(td);
@@ -1436,7 +1660,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // True while focus is in something that uses Space itself: a text box, or
   // a checkbox in the Columns menu.
   function typingInField(el) {
-    return el && (el.isContentEditable || !!el.closest?.("#col-menu") || el.tagName === "TEXTAREA" ||
+    return el && (el.isContentEditable || !!el.closest?.("#col-menu, .ms") || el.tagName === "TEXTAREA" ||
       (el.tagName === "INPUT" && !["checkbox", "radio", "button"].includes(el.type)) || el.tagName === "SELECT");
   }
 
@@ -1578,6 +1802,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Uses the copy event (not navigator.clipboard), which also works when the
   // page is served over plain http.
   document.addEventListener("copy", (e) => {
+    if (dibsDlg.open) {
+      copyPopupSelection(e);
+      return;
+    }
     const el = document.activeElement;
     if (el && (el.isContentEditable || el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type !== "checkbox"))) return;
     if (!getSelection().isCollapsed) return; // ordinary highlighted text copies as usual
@@ -1635,12 +1863,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const car = byVIN.get(vin);
         if (car) car.dibs = dibs;
       }
+      for (const [vin, wave] of Object.entries(res.wave || {})) {
+        const car = byVIN.get(vin);
+        if (car) car.wave = wave;
+      }
       pending.clear();
       drawWindow(true);
       updatePending();
       const parts = [];
       if (res.claimed) parts.push(`${res.claimed} dibs called`);
       if (res.released) parts.push(`${res.released} released`);
+      if (res.waveSet) parts.push(`${res.waveSet} ticked ${WAVE}`);
+      if (res.waveCleared) parts.push(`${res.waveCleared} unticked ${WAVE}`);
       SF.setStatus(status, "ok", parts.length ? `Saved: ${parts.join(", ")}.` : "Saved. Nothing had changed.");
     } catch (err) {
       SF.setStatus(status, "err", `Dibs not saved: ${err.message}`);
@@ -1679,70 +1913,307 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ---------- All Dibs pop-up ----------
   // Every car on the latest nationwide sheet with a saved dibs, fetched fresh
-  // each time it opens. It shows every column, including ones hidden in the
-  // Columns menu, and Export downloads the same list as .xlsx.
+  // each time it opens. Its table works like the main one, read-only: click
+  // a heading to sort (a dibs or notes heading selects that column instead),
+  // drag a column edge to resize, and click, drag or Shift+click cells to
+  // select them for Ctrl+C. It always shows every column, including ones
+  // hidden in the Columns menu. Export downloads the same list as .xlsx.
 
   const dibsDlg = $("all-dibs"), dibsDlgBtn = $("all-dibs-btn"), dibsDlgClose = $("all-dibs-close");
   const dibsDlgSub = $("all-dibs-sub"), dibsDlgStatus = $("all-dibs-status"), dibsExport = $("all-dibs-export");
-  const dibsTable = $("all-dibs-table");
+  const dibsHint = $("all-dibs-hint");
+  const pTable = $("all-dibs-table"), pWrap = pTable.parentElement, pHead = pTable.tHead.rows[0], pBody = pTable.tBodies[0];
+  const P_WIDTHS_KEY = "inventory.allDibsColWidths"; // localStorage
+  const P_SORT_KEY = "inventory.allDibsSort"; // sessionStorage, like the main table's sort
   let dibsDlgReq = 0;
 
-  function cellText(col, car) {
-    const v = car[col.key];
-    return col.fmt ? col.fmt(v) : v ?? "";
+  let pCols = []; // {key, label, kind: "car" | "dib" | "note", col?, name?, def, th, el}
+  let pCars = [], pView = [];
+  let pSort = { key: null, dir: 1 };
+  try { pSort = JSON.parse(sessionStorage.getItem(P_SORT_KEY)) || pSort; } catch { /* none saved */ }
+  let pSel = null; // {from, to, c1, c2}: rows of pView and indexes of pCols
+  let pAnchor = null; // {i, c}
+
+  // The pop-up's own widths; a column it hasn't sized starts at the main table's width.
+  const pWidths = (() => { try { return JSON.parse(localStorage.getItem(P_WIDTHS_KEY)) || {}; } catch { return {}; } })();
+  const pWidthOf = (c) => pWidths[c.key] || widths[c.key] || c.def;
+  function applyPopupWidths() {
+    let sum = 0;
+    for (const c of pCols) {
+      const w = pWidthOf(c);
+      c.el.style.width = w + "px";
+      sum += w;
+    }
+    pTable.style.width = `max(${sum}px, 100%)`;
+  }
+  // Like the main table, an empty last column soaks up spare room, so the
+  // other columns keep exactly the widths they're dragged to.
+  const pFiller = () => {
+    const th = document.createElement("th");
+    th.className = "filler";
+    th.setAttribute("aria-hidden", "true");
+    return th;
+  };
+  const popupSizing = {
+    widths: pWidths,
+    apply: applyPopupWidths,
+    applySoon: perFrame(applyPopupWidths),
+    save: () => { try { localStorage.setItem(P_WIDTHS_KEY, JSON.stringify(pWidths)); } catch { /* private mode */ } },
+  };
+
+  function buildPopupHeader(names) {
+    pCols = [
+      ...COLUMNS.map((col) => ({ key: col.key, label: col.label, kind: "car", col, def: col.w })),
+      { key: "wave", label: WAVE, kind: "wave", name: WAVE, def: WAVE_WIDTH },
+      ...names.map((name) => ({ key: "dib:" + name, label: name, kind: "dib", name, def: DIB_WIDTH })),
+      ...names.map((name) => ({ key: "note:" + name, label: name + " Notes", kind: "note", name, def: NOTE_WIDTH })),
+    ];
+    const colgroup = document.createElement("colgroup");
+    pHead.replaceChildren();
+    pCols.forEach((c, idx) => {
+      c.el = colgroup.appendChild(document.createElement("col"));
+      const th = (c.th = document.createElement("th"));
+      th.scope = "col";
+      th.appendChild(document.createElement("span")).textContent = c.label;
+      if (c.kind === "car") {
+        th.className = "sortable";
+        th.addEventListener("click", () => {
+          pSort = { key: c.key, dir: pSort.key === c.key ? -pSort.dir : 1 };
+          try { sessionStorage.setItem(P_SORT_KEY, JSON.stringify(pSort)); } catch { /* private mode */ }
+          setPopupSel(null);
+          renderPopupRows();
+        });
+      } else {
+        th.className = c.kind === "note" ? "" : "dib-head";
+        th.title = `Select the whole ${c.label} column, then press ${COPY_KEYS} to copy it`;
+        th.addEventListener("click", () => {
+          if (pView.length) setPopupSel({ from: 0, to: pView.length - 1, c1: idx, c2: idx });
+        });
+      }
+      addResizer(th, c.key, { sizing: popupSizing });
+      pHead.appendChild(th);
+    });
+    colgroup.appendChild(document.createElement("col"));
+    pHead.appendChild(pFiller());
+    pTable.querySelector("colgroup")?.remove();
+    pTable.prepend(colgroup);
+    applyPopupWidths();
+  }
+
+  // What a cell shows, and what Ctrl+C copies from it (dibs as TRUE/FALSE, as in the export).
+  function popupCopyText(c, car) {
+    if (c.kind === "car") return c.col.fmt ? c.col.fmt(car[c.key] ?? "") : car[c.key] ?? "";
+    if (c.kind === "dib") return car.dibs.some((d) => d.name === c.name) ? "TRUE" : "FALSE";
+    if (c.kind === "wave") return car.wave ? "TRUE" : "FALSE";
+    return car.notes[c.name] || "";
+  }
+
+  function renderPopupRows() {
+    pView = pCars.slice();
+    for (const c of pCols) {
+      if (c.kind === "car") c.th.setAttribute("aria-sort", pSort.key === c.key ? (pSort.dir > 0 ? "ascending" : "descending") : "none");
+    }
+    const sc = pSort.key && COLUMNS.find((c) => c.key === pSort.key);
+    if (sc) {
+      pView.sort(sc.num
+        ? (a, b) => (Number(a[sc.key]) - Number(b[sc.key])) * pSort.dir
+        : (a, b) => collator.compare(String(a[sc.key]), String(b[sc.key])) * pSort.dir);
+    }
+
+    const body = document.createDocumentFragment();
+    pView.forEach((car, i) => {
+      const tr = body.appendChild(document.createElement("tr"));
+      tr.dataset.i = i;
+      for (const c of pCols) {
+        const td = tr.appendChild(document.createElement("td"));
+        if (c.kind === "car") {
+          td.textContent = popupCopyText(c, car);
+          td.className = c.col.num ? "num" : c.col.mono ? "mono" : "";
+        } else if (c.kind === "wave") {
+          const box = td.appendChild(document.createElement("input"));
+          box.type = "checkbox";
+          box.checked = !!car.wave;
+          box.inert = true;
+          box.tabIndex = -1;
+          box.setAttribute("aria-label", `${WAVE}: ${car.wave ? "ticked" : "not ticked"}`);
+          td.className = car.wave ? "dib wave wave-on" : "dib wave";
+        } else if (c.kind === "dib") {
+          // Read-only checkboxes: the same look as the main table, but inert.
+          const order = car.dibs.findIndex((d) => d.name === c.name);
+          const box = td.appendChild(document.createElement("input"));
+          box.type = "checkbox";
+          box.checked = order >= 0;
+          box.inert = true;
+          box.tabIndex = -1;
+          box.setAttribute("aria-label", `${c.name}: ${order >= 0 ? "has dibs" : "no dibs"}`);
+          td.className = order >= 0 ? `dib dib-${Math.min(order + 1, 4)}` : "dib";
+        } else {
+          td.textContent = td.title = car.notes[c.name] || "";
+          td.className = "note";
+        }
+      }
+      tr.appendChild(document.createElement("td")).className = "filler";
+    });
+    if (!pView.length) {
+      const td = body.appendChild(document.createElement("tr")).appendChild(document.createElement("td"));
+      td.className = "empty";
+      td.colSpan = pCols.length + 1;
+      td.textContent = "Nobody has dibs on a car from the latest nationwide sheet yet.";
+    }
+    pBody.replaceChildren(body);
+    paintPopupSel();
+  }
+
+  function paintPopupSel() {
+    for (const tr of pBody.rows) {
+      const i = Number(tr.dataset.i);
+      const inRows = !!pSel && i >= pSel.from && i <= pSel.to;
+      for (let c = 0; c < pCols.length && tr.dataset.i !== undefined; c++) {
+        tr.cells[c].classList.toggle("cell-selected", inRows && c >= pSel.c1 && c <= pSel.c2);
+      }
+    }
+  }
+
+  function updatePopupHint() {
+    if (!pSel) {
+      dibsHint.textContent = "";
+      return;
+    }
+    const rowsN = pSel.to - pSel.from + 1, cols = pSel.c2 - pSel.c1 + 1;
+    const what = rowsN === 1 && cols === 1 ? "1 cell"
+      : `${rowsN.toLocaleString()} row${rowsN === 1 ? "" : "s"} × ${cols} column${cols === 1 ? "" : "s"}`;
+    dibsHint.textContent = `${what} selected: press ${COPY_KEYS} to copy`;
+  }
+  const updatePopupHintSoon = debounced(updatePopupHint, 120);
+
+  function setPopupSel(r) {
+    pSel = r;
+    paintPopupSel();
+    updatePopupHint();
+  }
+
+  // The popup cell under (x, y), clamped to the visible part of the table so
+  // a drag past an edge picks the edge row or column.
+  function popupCellAt(x, y) {
+    const r = pWrap.getBoundingClientRect(), headH = pTable.tHead.offsetHeight;
+    const cx = Math.min(Math.max(x, r.left + 2), r.left + pWrap.clientWidth - 2);
+    const cy = Math.min(Math.max(y, r.top + headH + 2), r.top + pWrap.clientHeight - 2);
+    const td = document.elementFromPoint(cx, cy)?.closest?.("#all-dibs-table tbody tr[data-i] > td");
+    return td ? { i: Number(td.parentElement.dataset.i), c: Math.min(td.cellIndex, pCols.length - 1) } : null;
+  }
+
+  pBody.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    const td = e.target.closest?.("tr[data-i] > td");
+    if (!td) return;
+    e.preventDefault(); // our selection instead of the browser's text selection
+    if (td.classList.contains("filler")) {
+      setPopupSel(null);
+      return;
+    }
+    const i = Number(td.parentElement.dataset.i), c = td.cellIndex;
+    if (e.shiftKey && pAnchor) {
+      setPopupSel({
+        from: Math.min(pAnchor.i, i), to: Math.max(pAnchor.i, i),
+        c1: Math.min(pAnchor.c, c), c2: Math.max(pAnchor.c, c),
+      });
+      return;
+    }
+    pAnchor = { i, c };
+    // Clicking inside the selection keeps it; dragging from there starts anew.
+    let keep = td.classList.contains("cell-selected");
+    if (!keep) setPopupSel({ from: i, to: i, c1: c, c2: c });
+
+    let lastX = e.clientX, lastY = e.clientY, raf = 0, armed = false;
+    const update = () => {
+      const at = popupCellAt(lastX, lastY);
+      if (!at) return;
+      if (keep) {
+        if (at.i === i && at.c === c) return;
+        keep = false;
+      }
+      pSel = {
+        from: Math.min(i, at.i), to: Math.max(i, at.i),
+        c1: Math.min(c, at.c), c2: Math.max(c, at.c),
+      };
+      paintPopupSel();
+      updatePopupHintSoon();
+    };
+    const updateSoon = perFrame(update);
+    // Like the main table: holding the pointer near an edge scrolls that way.
+    const tick = () => {
+      if (armed) {
+        const r = pWrap.getBoundingClientRect(), top = r.top + pTable.tHead.offsetHeight;
+        const edge = 32, step = (d) => Math.min(40, d / 2 + 4);
+        let dx = 0, dy = 0;
+        if (lastY > r.bottom - edge) dy = step(lastY - (r.bottom - edge));
+        else if (lastY < top + edge) dy = -step(top + edge - lastY);
+        if (lastX > r.right - edge) dx = step(lastX - (r.right - edge));
+        else if (lastX < r.left + edge) dx = -step(r.left + edge - lastX);
+        if (dx || dy) {
+          pWrap.scrollTop += dy;
+          pWrap.scrollLeft += dx;
+          update();
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const move = (ev) => {
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      if (Math.abs(lastX - e.clientX) + Math.abs(lastY - e.clientY) > 4) armed = true;
+      updateSoon();
+    };
+    const up = () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      updatePopupHintSoon.flush();
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  });
+
+  // Inside the pop-up, a click anywhere but a highlighted cell clears the
+  // selection (Shift+click on a cell, scrollbars and resizing don't count).
+  dibsDlg.addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || !pSel) return;
+    const t = e.target;
+    if (!(t instanceof Element) || t.closest("td.cell-selected") || t.closest(".col-resizer") || onScrollbar(e)) return;
+    if (e.shiftKey && t.closest("#all-dibs-table tbody td")) return;
+    setPopupSel(null);
+  }, true);
+
+  // Esc clears the selection first; with nothing selected it closes the pop-up.
+  dibsDlg.addEventListener("cancel", (e) => {
+    if (pSel) {
+      e.preventDefault();
+      setPopupSel(null);
+    }
+  });
+
+  // Called by the page's copy handler while the pop-up is open (the copy
+  // event goes to whatever has focus, which may be outside the pop-up).
+  function copyPopupSelection(e) {
+    if (!pSel || !getSelection().isCollapsed) return;
+    const clean = (v) => String(v).replace(/[\t\r\n]+/g, " ");
+    const lines = [];
+    for (let i = pSel.from; i <= pSel.to; i++) {
+      const cells = [];
+      for (let c = pSel.c1; c <= pSel.c2; c++) cells.push(clean(popupCopyText(pCols[c], pView[i])));
+      lines.push(cells.join("\t"));
+    }
+    e.preventDefault();
+    e.clipboardData.setData("text/plain", lines.join("\n"));
+    const n = lines.length * (pSel.c2 - pSel.c1 + 1);
+    SF.setStatus(dibsDlgStatus, "ok", `Copied ${n.toLocaleString()} cell${n === 1 ? "" : "s"}. Paste into a spreadsheet or email.`);
   }
 
   function renderAllDibs(res) {
-    const names = res.dibsNames;
-    const head = dibsTable.tHead.rows[0];
-    head.replaceChildren();
-    const th = (text, cls) => {
-      const el = document.createElement("th");
-      el.textContent = text;
-      if (cls) el.className = cls;
-      head.appendChild(el);
-    };
-    for (const c of COLUMNS) th(c.label, c.num ? "num" : "");
-    for (const n of names) th(n, "dib-head");
-    for (const n of names) th(n + " Notes");
-
-    const body = document.createDocumentFragment();
-    for (const car of res.cars) {
-      const tr = document.createElement("tr");
-      const td = (text, cls, title) => {
-        const el = document.createElement("td");
-        el.textContent = text;
-        if (cls) el.className = cls;
-        if (title) el.title = title;
-        tr.appendChild(el);
-      };
-      for (const c of COLUMNS) td(cellText(c, car), c.num ? "num" : c.mono ? "mono" : "");
-      // Read-only checkboxes: the same look as the main table, but inert.
-      for (const n of names) {
-        const i = car.dibs.findIndex((d) => d.name === n);
-        const box = document.createElement("input");
-        box.type = "checkbox";
-        box.checked = i >= 0;
-        box.inert = true;
-        box.tabIndex = -1;
-        box.setAttribute("aria-label", `${n}: ${i >= 0 ? "has dibs" : "no dibs"}`);
-        td("", i >= 0 ? `dib dib-${Math.min(i + 1, 4)}` : "dib");
-        tr.lastChild.appendChild(box);
-      }
-      for (const n of names) td(car.notes[n] || "", "note", car.notes[n] || "");
-      body.appendChild(tr);
-    }
-    if (!res.cars.length) {
-      const tr = document.createElement("tr");
-      const el = document.createElement("td");
-      el.className = "empty";
-      el.colSpan = COLUMNS.length + names.length * 2;
-      el.textContent = "Nobody has dibs on a car from the latest nationwide sheet yet.";
-      tr.appendChild(el);
-      body.appendChild(tr);
-    }
-    dibsTable.tBodies[0].replaceChildren(body);
-
+    if (!pCols.length) buildPopupHeader(res.dibsNames);
+    pCars = res.cars;
+    renderPopupRows();
     const n = res.cars.length;
     let sub = `${n.toLocaleString()} car${n === 1 ? "" : "s"} with dibs`;
     sub += res.latest ? ` on the ${new Date(res.latest.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} nationwide sheet` : "";
@@ -1754,12 +2225,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const id = ++dibsDlgReq;
     dibsDlgSub.textContent = "Loading…";
     dibsExport.disabled = true;
-    dibsTable.tHead.rows[0].replaceChildren();
-    dibsTable.tBodies[0].replaceChildren();
+    pCars = [];
+    pAnchor = null;
+    setPopupSel(null);
+    pBody.replaceChildren();
     SF.setStatus(dibsDlgStatus, pending.size ? "warn" : "",
       pending.size === 1 ? "You have 1 dibs change that isn't saved yet, so it isn't shown here. Press Call Dibs to save it."
         : pending.size ? `You have ${pending.size.toLocaleString()} dibs changes that aren't saved yet, so they aren't shown here. Press Call Dibs to save them.` : "");
     if (!dibsDlg.open) dibsDlg.showModal();
+    pWrap.scrollTo(0, 0);
     try {
       const res = await SF.fetchJSON("/api/dibs/all");
       if (id !== dibsDlgReq || !dibsDlg.open) return;
@@ -1779,9 +2253,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const r = dibsDlg.getBoundingClientRect();
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dibsDlg.close();
   });
-  // Keep the table's shortcuts (Space, Delete, Ctrl+C on selected cells) from
-  // acting on the page behind; text selected in the pop-up copies normally.
-  for (const type of ["keydown", "keyup", "copy"]) dibsDlg.addEventListener(type, (e) => e.stopPropagation());
+  // Keep the main table's shortcuts (Space, Delete, Esc) from acting on the page behind.
+  for (const type of ["keydown", "keyup"]) dibsDlg.addEventListener(type, (e) => e.stopPropagation());
 
   dibsExport.addEventListener("click", async () => {
     SF.setBusy(dibsExport, true, "Exporting…");
@@ -1863,26 +2336,28 @@ document.addEventListener("DOMContentLoaded", () => {
   // nationwide-sheet order. Unsaved dibs ticks are kept.
   resetBtn.addEventListener("click", () => {
     q.value = DEFAULTS.q;
-    stateSel.value = DEFAULTS.state;
+    stateFilter.setValues([]);
+    updateCityOptions();
+    cityFilter.setValues([]);
     limitSel.value = DEFAULTS.limit;
     includeOld.checked = DEFAULTS.old;
     vinBox.value = DEFAULTS.vins;
     sort = { ...DEFAULTS.sort };
     reload();
   });
-  stateSel.addEventListener("change", reload);
   includeOld.addEventListener("change", reload);
   limitSel.addEventListener("change", reload);
   prev.addEventListener("click", () => { offset = Math.max(0, offset - Number(limitSel.value)); load(); });
   next.addEventListener("click", () => { offset += Number(limitSel.value); load(); });
 
-  SF.fetchJSON("/api/cars/states")
-    .then(({ states }) => {
-      for (const s of states) stateSel.add(new Option(s, s));
-    })
-    .catch(() => { /* filter just stays at "All states" */ })
-    .finally(() => {
-      stateSel.value = initial.state; // falls back to "All states" if it's no longer listed
+  Promise.allSettled([SF.fetchJSON("/api/cars/states"), SF.fetchJSON("/api/cars/cities")])
+    .then(([st, ct]) => {
+      // If a list doesn't load, its filter just stays at "All …".
+      if (st.status === "fulfilled") stateFilter.setOptions(st.value.states.map((v) => ({ value: v, label: v })));
+      if (ct.status === "fulfilled") allCities = ct.value.cities;
+      stateFilter.setValues(initial.states); // states no longer listed are dropped
+      updateCityOptions();
+      cityFilter.setValues(initial.cities);
       restored = true;
       load();
     });

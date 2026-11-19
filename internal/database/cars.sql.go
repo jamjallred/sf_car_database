@@ -18,14 +18,16 @@ WHERE ($1::text IS NULL
        OR make ILIKE '%' || $1::text || '%'
        OR model ILIKE '%' || $1::text || '%'
        OR city ILIKE '%' || $1::text || '%')
-  AND ($2::text IS NULL OR state = $2::text)
-  AND ($3::text[] IS NULL OR vin = ANY($3::text[]))
-  AND ($4::bigint IS NULL OR last_import_id = $4::bigint)
+  AND ($2::text[] IS NULL OR state = ANY($2::text[]))
+  AND ($3::text[] IS NULL OR (state || '|' || city) = ANY($3::text[]))
+  AND ($4::text[] IS NULL OR vin = ANY($4::text[]))
+  AND ($5::bigint IS NULL OR last_import_id = $5::bigint)
 `
 
 type CountCarsParams struct {
 	Search   *string
-	State    *string
+	States   []string
+	Places   []string
 	Vins     []string
 	ImportID *int64
 }
@@ -33,7 +35,8 @@ type CountCarsParams struct {
 func (q *Queries) CountCars(ctx context.Context, arg CountCarsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCars,
 		arg.Search,
-		arg.State,
+		arg.States,
+		arg.Places,
 		arg.Vins,
 		arg.ImportID,
 	)
@@ -144,6 +147,35 @@ func (q *Queries) GetFirstXRows(ctx context.Context, limit int32) ([]Car, error)
 	return items, nil
 }
 
+const listCities = `-- name: ListCities :many
+SELECT DISTINCT state, city FROM cars WHERE city <> '' ORDER BY city, state
+`
+
+type ListCitiesRow struct {
+	State string
+	City  string
+}
+
+func (q *Queries) ListCities(ctx context.Context) ([]ListCitiesRow, error) {
+	rows, err := q.db.Query(ctx, listCities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCitiesRow
+	for rows.Next() {
+		var i ListCitiesRow
+		if err := rows.Scan(&i.State, &i.City); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStates = `-- name: ListStates :many
 SELECT DISTINCT state FROM cars ORDER BY state
 `
@@ -175,16 +207,18 @@ WHERE ($1::text IS NULL
        OR make ILIKE '%' || $1::text || '%'
        OR model ILIKE '%' || $1::text || '%'
        OR city ILIKE '%' || $1::text || '%')
-  AND ($2::text IS NULL OR state = $2::text)
-  AND ($3::text[] IS NULL OR vin = ANY($3::text[]))
-  AND ($4::bigint IS NULL OR last_import_id = $4::bigint)
+  AND ($2::text[] IS NULL OR state = ANY($2::text[]))
+  AND ($3::text[] IS NULL OR (state || '|' || city) = ANY($3::text[]))
+  AND ($4::text[] IS NULL OR vin = ANY($4::text[]))
+  AND ($5::bigint IS NULL OR last_import_id = $5::bigint)
 ORDER BY state, city, year, make, model
-LIMIT $6 OFFSET $5
+LIMIT $7 OFFSET $6
 `
 
 type SearchCarsParams struct {
 	Search   *string
-	State    *string
+	States   []string
+	Places   []string
 	Vins     []string
 	ImportID *int64
 	Off      int32
@@ -194,7 +228,8 @@ type SearchCarsParams struct {
 func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, error) {
 	rows, err := q.db.Query(ctx, searchCars,
 		arg.Search,
-		arg.State,
+		arg.States,
+		arg.Places,
 		arg.Vins,
 		arg.ImportID,
 		arg.Off,

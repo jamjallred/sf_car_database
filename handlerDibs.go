@@ -16,6 +16,16 @@ import (
 // dibsNames are the inventory page's dibs columns, in display order.
 var dibsNames = []string{"Mike", "Stan", "Jaxon", "Gregg"}
 
+// waveName is the "2nd Wave" checkbox column. Its ticks come through
+// /api/dibs like a dibs column's, but are kept in car_second_wave: they have
+// no order and don't count as dibs.
+const waveName = "2nd Wave"
+
+type waveJSON struct {
+	By string    `json:"by"`
+	At time.Time `json:"at"`
+}
+
 const maxDibsChanges = 10000
 
 type dibJSON struct {
@@ -35,9 +45,12 @@ type dibsRequest struct {
 }
 
 type dibsResponse struct {
-	Claimed  int                  `json:"claimed"`
-	Released int                  `json:"released"`
-	Dibs     map[string][]dibJSON `json:"dibs"` // current dibs of every VIN in the request
+	Claimed     int                  `json:"claimed"`
+	Released    int                  `json:"released"`
+	WaveSet     int                  `json:"waveSet"`     // cars ticked 2nd Wave
+	WaveCleared int                  `json:"waveCleared"` // cars unticked
+	Dibs        map[string][]dibJSON `json:"dibs"`        // current dibs of every VIN in the request
+	Wave        map[string]*waveJSON `json:"wave"`        // current 2nd Wave of every VIN (null: not ticked)
 }
 
 // dibsFor returns each VIN's dibs, oldest first.
@@ -52,6 +65,22 @@ func (cfg *apiConfig) dibsFor(ctx context.Context, q *database.Queries, vins []s
 	}
 	for _, d := range rows {
 		out[d.Vin] = append(out[d.Vin], dibJSON{Name: d.Claimant, At: d.ClaimedAt.Time})
+	}
+	return out, nil
+}
+
+// waveFor returns the 2nd Wave tick of each VIN that has one.
+func waveFor(ctx context.Context, q *database.Queries, vins []string) (map[string]*waveJSON, error) {
+	out := make(map[string]*waveJSON, len(vins))
+	if len(vins) == 0 {
+		return out, nil
+	}
+	rows, err := q.ListSecondWaveForVins(ctx, vins)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range rows {
+		out[w.Vin] = &waveJSON{By: w.SetBy, At: w.SetAt.Time}
 	}
 	return out, nil
 }
@@ -76,6 +105,7 @@ func requireVINs(ctx context.Context, q *database.Queries, vins []string) error 
 
 // POST /api/dibs — {calledBy, changes: [{vin, name, claim}]}
 //
+// name is a dibs column, or "2nd Wave" to tick (claim) or untick that box.
 // Claims keep their original time if the person already has dibs, so
 // re-submitting never moves anyone down the order. Changes are applied in the
 // order given, in one transaction.
@@ -103,7 +133,7 @@ func (cfg *apiConfig) handlerDibs(w http.ResponseWriter, r *http.Request) {
 			respondErr(w, r, badRequest("a change is missing its VIN"), "")
 			return
 		}
-		if !slices.Contains(dibsNames, c.Name) {
+		if c.Name != waveName && !slices.Contains(dibsNames, c.Name) {
 			respondErr(w, r, badRequest("%q isn't one of the dibs columns", c.Name), "")
 			return
 		}
@@ -133,10 +163,18 @@ func (cfg *apiConfig) handlerDibs(w http.ResponseWriter, r *http.Request) {
 	for _, c := range req.Changes {
 		var n int64
 		action := "claim"
-		if c.Claim {
+		switch {
+		case c.Name == waveName && c.Claim:
+			n, err = q.SetSecondWave(ctx, database.SetSecondWaveParams{Vin: c.VIN, SetBy: calledBy, SetAt: now})
+			res.WaveSet += int(n)
+		case c.Name == waveName:
+			action = "release"
+			n, err = q.ClearSecondWave(ctx, c.VIN)
+			res.WaveCleared += int(n)
+		case c.Claim:
 			n, err = q.ClaimDibs(ctx, database.ClaimDibsParams{Vin: c.VIN, Claimant: c.Name, CalledBy: calledBy, ClaimedAt: now})
 			res.Claimed += int(n)
-		} else {
+		default:
 			action = "release"
 			n, err = q.ReleaseDibs(ctx, database.ReleaseDibsParams{Vin: c.VIN, Claimant: c.Name})
 			res.Released += int(n)
@@ -155,7 +193,14 @@ func (cfg *apiConfig) handlerDibs(w http.ResponseWriter, r *http.Request) {
 		respondErr(w, r, err, "could not save dibs")
 		return
 	}
+	if res.Wave, err = waveFor(ctx, q, vins); err != nil {
+		respondErr(w, r, err, "could not save dibs")
+		return
+	}
 	for _, v := range vins {
+		if _, ok := res.Wave[v]; !ok {
+			res.Wave[v] = nil // so the page learns the box is now unticked
+		}
 		if res.Dibs[v] == nil {
 			res.Dibs[v] = []dibJSON{}
 		}

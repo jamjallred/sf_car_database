@@ -42,7 +42,8 @@ WHERE (sqlc.narg('search')::text IS NULL
        OR make ILIKE '%' || sqlc.narg('search')::text || '%'
        OR model ILIKE '%' || sqlc.narg('search')::text || '%'
        OR city ILIKE '%' || sqlc.narg('search')::text || '%')
-  AND (sqlc.narg('state')::text IS NULL OR state = sqlc.narg('state')::text)
+  AND (sqlc.narg('states')::text[] IS NULL OR state = ANY(sqlc.narg('states')::text[]))
+  AND (sqlc.narg('places')::text[] IS NULL OR (state || '|' || city) = ANY(sqlc.narg('places')::text[]))
   AND (sqlc.narg('vins')::text[] IS NULL OR vin = ANY(sqlc.narg('vins')::text[]))
   AND (sqlc.narg('import_id')::bigint IS NULL OR last_import_id = sqlc.narg('import_id')::bigint)
 ORDER BY state, city, year, make, model
@@ -55,9 +56,13 @@ WHERE (sqlc.narg('search')::text IS NULL
        OR make ILIKE '%' || sqlc.narg('search')::text || '%'
        OR model ILIKE '%' || sqlc.narg('search')::text || '%'
        OR city ILIKE '%' || sqlc.narg('search')::text || '%')
-  AND (sqlc.narg('state')::text IS NULL OR state = sqlc.narg('state')::text)
+  AND (sqlc.narg('states')::text[] IS NULL OR state = ANY(sqlc.narg('states')::text[]))
+  AND (sqlc.narg('places')::text[] IS NULL OR (state || '|' || city) = ANY(sqlc.narg('places')::text[]))
   AND (sqlc.narg('vins')::text[] IS NULL OR vin = ANY(sqlc.narg('vins')::text[]))
   AND (sqlc.narg('import_id')::bigint IS NULL OR last_import_id = sqlc.narg('import_id')::bigint);
 
 -- name: ListStates :many
 SELECT DISTINCT state FROM cars ORDER BY state;
+
+-- name: ListCities :many
+SELECT DISTINCT state, city FROM cars WHERE city <> '' ORDER BY city, state;

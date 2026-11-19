@@ -50,6 +50,12 @@ type CarNote struct {
 	UpdatedAt pgtype.Timestamp
 }
 
+type CarSecondWave struct {
+	Vin   string
+	SetBy string
+	SetAt pgtype.Timestamp
+}
+
 type CarsCustomer struct {
 	ID         int32
 	Vin        *string

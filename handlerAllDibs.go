@@ -14,13 +14,14 @@ import (
 type allDibsJSON struct {
 	Cars      []carJSON   `json:"cars"`
 	DibsNames []string    `json:"dibsNames"`
+	WaveName  string      `json:"waveName"`
 	Latest    *importJSON `json:"latest,omitempty"` // nil: no import yet, so every car counts
 }
 
 // dibbedCars returns the cars on the latest nationwide sheet that have at
 // least one active dibs, with their dibs and notes.
 func (cfg *apiConfig) dibbedCars(ctx context.Context) (allDibsJSON, error) {
-	out := allDibsJSON{Cars: []carJSON{}, DibsNames: dibsNames}
+	out := allDibsJSON{Cars: []carJSON{}, DibsNames: dibsNames, WaveName: waveName}
 	latest, err := cfg.latestImport(ctx)
 	if err != nil {
 		return out, err
@@ -46,8 +47,14 @@ func (cfg *apiConfig) dibbedCars(ctx context.Context) (allDibsJSON, error) {
 	if err != nil {
 		return out, err
 	}
+	waves, err := waveFor(ctx, cfg.dbQueries, vins)
+	if err != nil {
+		return out, err
+	}
 	for _, c := range cars {
-		out.Cars = append(out.Cars, toCarJSON(c, dibs[c.Vin], notes[c.Vin], latest))
+		cj := toCarJSON(c, dibs[c.Vin], notes[c.Vin], latest)
+		cj.Wave = waves[c.Vin]
+		out.Cars = append(out.Cars, cj)
 	}
 	return out, nil
 }
@@ -96,6 +103,9 @@ func (cfg *apiConfig) handlerAllDibsXLSX(w http.ResponseWriter, r *http.Request)
 // yellow, orange (the 5th and later stay orange).
 var dibFills = []string{"#B7E4C0", "#BCD8FB", "#FBE98A", "#FDC58A"}
 
+// waveFill marks a ticked 2nd Wave cell, matching the page's purple.
+const waveFill = "#DDD2FA"
+
 func allDibsWorkbook(res allDibsJSON) (*excelize.File, error) {
 	f := excelize.NewFile()
 	const sheet = "All Dibs"
@@ -105,7 +115,10 @@ func allDibsWorkbook(res allDibsJSON) (*excelize.File, error) {
 
 	header := []any{"State", "City", "Yr", "Make", "Model", "Trim", "Drive", "Vin", "Color", "Miles", "Price", "MSRP"}
 	widths := []float64{7, 16, 6, 12, 22, 22, 7, 20, 11, 9, 10, 10}
-	carCols := len(header)
+	header = append(header, res.WaveName) // after MSRP, as on the page
+	widths = append(widths, 10)
+	waveCol, _ := excelize.ColumnNumberToName(len(header))
+	carCols := len(header) // the dibs columns start after these
 	for _, n := range res.DibsNames {
 		header = append(header, n)
 		widths = append(widths, 10)
@@ -133,6 +146,12 @@ func allDibsWorkbook(res allDibsJSON) (*excelize.File, error) {
 	}
 	center := &excelize.Alignment{Horizontal: "center"}
 	noDibStyle, err := f.NewStyle(&excelize.Style{Font: font, Alignment: center})
+	if err != nil {
+		return nil, err
+	}
+	waveFillStyle, err := f.NewStyle(&excelize.Style{
+		Font: font, Alignment: center, Fill: excelize.Fill{Type: "pattern", Color: []string{waveFill}, Pattern: 1},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +188,7 @@ func allDibsWorkbook(res allDibsJSON) (*excelize.File, error) {
 		if c.Price == 0 {
 			price = "n/a"
 		}
-		values := []any{c.State, c.City, yearValue(c.Year), c.Make, c.Model, c.Trim, c.Drive, c.VIN, c.Color, c.Miles, price, msrp}
+		values := []any{c.State, c.City, yearValue(c.Year), c.Make, c.Model, c.Trim, c.Drive, c.VIN, c.Color, c.Miles, price, msrp, c.Wave != nil}
 		order := make(map[string]int, len(c.Dibs))
 		for j, d := range c.Dibs {
 			order[d.Name] = j
@@ -195,6 +214,13 @@ func allDibsWorkbook(res allDibsJSON) (*excelize.File, error) {
 			if err := f.SetCellStyle(sheet, fmt.Sprintf("%s%d", s.from, row), fmt.Sprintf("%s%d", s.to, row), s.style); err != nil {
 				return nil, err
 			}
+		}
+		waveStyle := noDibStyle
+		if c.Wave != nil {
+			waveStyle = waveFillStyle
+		}
+		if ref := fmt.Sprintf("%s%d", waveCol, row); f.SetCellStyle(sheet, ref, ref, waveStyle) != nil {
+			return nil, fmt.Errorf("styling %s", ref)
 		}
 		for k, n := range res.DibsNames {
 			style := noDibStyle
