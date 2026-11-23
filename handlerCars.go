@@ -64,6 +64,10 @@ type carsPage struct {
 //
 // Without a search (q or vins), only the cars of the most recent nationwide
 // sheet are returned, unless scope=all. A search always covers every car.
+//
+// marked=1 keeps only the latest sheet's cars that have a dibs, a 2nd Wave
+// tick or a note (whatever the search or scope); it combines with the other
+// filters.
 func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) {
 	qs := r.URL.Query()
 
@@ -86,9 +90,10 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 		respondErr(w, r, err, "could not load inventory")
 		return
 	}
+	marked := qs.Get("marked") == "1"
 	scope := "all"
 	var importID *int64
-	if latest != nil && search == "" && len(vins) == 0 && qs.Get("scope") != "all" {
+	if latest != nil && (marked || search == "" && len(vins) == 0 && qs.Get("scope") != "all") {
 		scope = "latest"
 		importID = &latest.ID
 	}
@@ -99,6 +104,7 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 		Places:   cleanList(qs["city"]), // "ST|City"
 		Vins:     vins,                  // nil means "no VIN filter"
 		ImportID: importID,
+		Marked:   marked,
 	}
 
 	total, err := cfg.dbQueries.CountCars(ctx, filter)
@@ -112,6 +118,7 @@ func (cfg *apiConfig) handlerSearchCars(w http.ResponseWriter, r *http.Request) 
 		Places:   filter.Places,
 		Vins:     filter.Vins,
 		ImportID: filter.ImportID,
+		Marked:   filter.Marked,
 		Lim:      limit,
 		Off:      offset,
 	})

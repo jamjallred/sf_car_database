@@ -456,6 +456,10 @@ body.filling, body.filling * { cursor: crosshair !important; user-select: none; 
 .dibs-bar .legend { margin: 0 auto 0 0; color: var(--muted); }
 .dibs-bar .pending-note { font-size: 14px; font-weight: 600; }
 .dibs-bar + .status.show { margin: 0 0 12px; }
+.dibs-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.dibs-actions-row { display: flex; gap: 12px; align-items: center; }
+.btn.toggle[aria-pressed="true"] { background: #1f883d; border-color: #1f883d; color: #fff; }
+.btn.toggle[aria-pressed="true"]:hover { background: #1a7f37; }
 
 .pager { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; color: var(--muted); }
 

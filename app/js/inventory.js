@@ -49,6 +49,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const notesState = $("notes-state"), notesUndo = $("notes-undo"), rangeHint = $("range-hint");
   const resetBtn = $("reset-filters");
   const includeOld = $("include-old"), includeOldLabel = $("include-old-label");
+  const viewAllBtn = $("view-all-dibs");
+  // View All Dibs: only the latest sheet's cars with a dibs, a 2nd Wave tick or a note.
+  const markedOn = () => viewAllBtn.getAttribute("aria-pressed") === "true";
+  const setMarked = (on) => {
+    viewAllBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  };
   const notesFlag = $("notes-flag");
   const notesPanel = $("notes-panel"), notesHead = $("notes-head"), notesBody = $("notes-body"), notesRows = $("notes-rows");
   const colMenuBtn = $("col-menu-btn"), colMenuPanel = $("col-menu-panel");
@@ -268,7 +274,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // away when the page unloads), so a refresh shows the same cars. A link with
   // ?q=/state=/limit= overrides the saved search, state and page size.
 
-  const DEFAULTS = { q: "", states: [], cities: [], limit: "all", offset: 0, vins: "", old: false, sort: { key: null, dir: 1 } };
+  const DEFAULTS = { q: "", states: [], cities: [], limit: "all", offset: 0, vins: "", old: false, marked: false, sort: { key: null, dir: 1 } };
 
   function loadFilters() {
     let saved = {};
@@ -276,13 +282,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const f = { ...DEFAULTS, ...saved };
     if (typeof saved.state === "string") f.states = saved.state ? [saved.state] : []; // saved before multi-select
     const params = new URLSearchParams(location.search);
-    if (["q", "state", "city", "limit", "offset", "scope"].some((k) => params.has(k))) {
+    if (["q", "state", "city", "limit", "offset", "scope", "marked"].some((k) => params.has(k))) {
       f.q = params.get("q") || "";
       f.states = params.getAll("state").filter(Boolean);
       f.cities = params.getAll("city").filter(Boolean);
       f.limit = params.get("limit") || "all";
       f.offset = Number(params.get("offset")) || 0;
       f.old = params.get("scope") === "all";
+      f.marked = params.get("marked") === "1";
     }
     return f;
   }
@@ -295,6 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const c of cityFilter.values) p.append("city", c);
     p.set("limit", limitSel.value);
     if (includeOld.checked) p.set("scope", "all");
+    if (markedOn()) p.set("marked", "1");
     if (offset && limitSel.value !== "all") p.set("offset", offset);
     return p;
   }
@@ -305,11 +313,11 @@ document.addEventListener("DOMContentLoaded", () => {
     history.replaceState(null, "", "?" + filterParams().toString());
     const f = {
       q: q.value, states: stateFilter.values, cities: cityFilter.values,
-      limit: limitSel.value, offset, vins: vinBox.value, old: includeOld.checked, sort,
+      limit: limitSel.value, offset, vins: vinBox.value, old: includeOld.checked, marked: markedOn(), sort,
     };
     try { sessionStorage.setItem(FILTERS_KEY, JSON.stringify(f)); } catch { /* private mode */ }
     resetBtn.disabled = !q.value.trim() && !stateFilter.values.length && !cityFilter.values.length && limitSel.value === DEFAULTS.limit &&
-      !vinBox.value.trim() && !sort.key && !includeOld.checked;
+      !vinBox.value.trim() && !sort.key && !includeOld.checked && !markedOn();
   }
   const saveFilters = debounced(saveFiltersNow, 400);
 
@@ -337,8 +345,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!limitSel.value) limitSel.value = DEFAULTS.limit;
   offset = initial.offset;
   includeOld.checked = !!initial.old;
+  setMarked(!!initial.marked);
   vinBox.value = initial.vins;
-  if (initial.sort && initial.sort.key && COLUMNS.some((c) => c.key === initial.sort.key)) sort = initial.sort;
+  if (initial.sort && initial.sort.key && (COLUMNS.some((c) => c.key === initial.sort.key) || initial.sort.key.startsWith("dib:"))) sort = initial.sort;
 
   // ---------- column widths ----------
   // The table uses a fixed layout driven by a <colgroup>. An empty filler
@@ -445,6 +454,37 @@ document.addEventListener("DOMContentLoaded", () => {
     sized.appendChild(grip);
   }
 
+  const dibHeads = new Map(); // dibs name -> its heading, for the sort arrow
+
+  // Sorting by a dibs column: cars ticked for that person first, then cars
+  // without a 2nd Wave tick before those with one, then by the person's place
+  // in line on the car (1st, green, first). Sorting by 2nd Wave: ticked cars
+  // first, then by who is 1st in line on the car (Mike, Stan, Jaxon, Gregg,
+  // then nobody). checked(car, name) says whether a box is ticked; places in
+  // line are the saved ones. dir -1 reverses the whole order.
+  function dibSortCompare(name, dir, checked) {
+    const ranks = new Map();
+    const rank = (car) => {
+      let r = ranks.get(car);
+      if (!r) {
+        if (name === WAVE) {
+          const first = car.dibs.length ? dibsNames.indexOf(car.dibs[0].name) : -1;
+          r = [checked(car, WAVE) ? 0 : 1, first < 0 ? Infinity : first];
+        } else {
+          const pos = car.dibs.findIndex((d) => d.name === name);
+          r = [checked(car, name) ? 0 : 1, checked(car, WAVE) ? 1 : 0, pos < 0 ? Infinity : pos];
+        }
+        ranks.set(car, r);
+      }
+      return r;
+    };
+    return (a, b) => {
+      const ra = rank(a), rb = rank(b);
+      for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return (ra[i] < rb[i] ? -1 : 1) * dir;
+      return 0;
+    };
+  }
+
   function buildHeader() {
     const colgroup = document.createElement("colgroup");
     const addCol = (key, def) => {
@@ -472,8 +512,14 @@ document.addEventListener("DOMContentLoaded", () => {
     waveTh.scope = "col";
     waveTh.className = "dib-head wave-head";
     waveTh.appendChild(document.createElement("span")).textContent = WAVE;
-    waveTh.title = `Select every ${WAVE} box shown, then press Space to tick them`;
-    waveTh.addEventListener("click", () => selectDibColumn(WAVE));
+    waveTh.title = `Click to sort ${WAVE} ticked cars first (then by who is 1st in line: ${dibsNames.join(", ")}). Shift+click to select every ${WAVE} box shown, then press Space to tick them`;
+    waveTh.addEventListener("click", (e) => {
+      if (e.shiftKey) { selectDibColumn(WAVE); return; }
+      sort = { key: "dib:" + WAVE, dir: sort.key === "dib:" + WAVE ? -sort.dir : 1 };
+      saveFiltersNow();
+      renderAll();
+    });
+    dibHeads.set(WAVE, waveTh);
     addResizer(waveTh, "wave");
     thead.appendChild(waveTh);
     addCol("wave", WAVE_WIDTH);
@@ -493,8 +539,14 @@ document.addEventListener("DOMContentLoaded", () => {
       th.scope = "col";
       th.className = "dib-head pin";
       th.appendChild(document.createElement("span")).textContent = name;
-      th.title = `Select every ${name} box shown, then press Space to tick them`;
-      th.addEventListener("click", () => selectDibColumn(name));
+      th.title = `Click to sort ${name}'s ticked cars first (then no 2nd Wave before 2nd Wave, then by place in line). Shift+click to select every ${name} box shown, then press Space to tick them`;
+      th.addEventListener("click", (e) => {
+        if (e.shiftKey) { selectDibColumn(name); return; }
+        sort = { key: "dib:" + name, dir: sort.key === "dib:" + name ? -sort.dir : 1 };
+        saveFiltersNow();
+        renderAll();
+      });
+      dibHeads.set(name, th);
       addResizer(th, col.key);
       thead.appendChild(th);
       addCol(col.key, col.def);
@@ -901,8 +953,15 @@ document.addEventListener("DOMContentLoaded", () => {
       col.th.setAttribute("aria-sort", sort.key === col.key ? (sort.dir > 0 ? "ascending" : "descending") : "none");
     }
 
+    for (const [name, th] of dibHeads) {
+      th.setAttribute("aria-sort", sort.key === "dib:" + name ? (sort.dir > 0 ? "ascending" : "descending") : "none");
+    }
+
     view = rows;
-    if (sort.key) {
+    const dibSort = sort.key?.startsWith("dib:") ? sort.key.slice(4) : null;
+    if (dibSort) {
+      if (dibHeads.has(dibSort)) view = [...rows].sort(dibSortCompare(dibSort, sort.dir, isChecked));
+    } else if (sort.key) {
       const col = COLUMNS.find((c) => c.key === sort.key);
       const cmp = col.num
         ? (a, b) => (Number(a[col.key]) - Number(b[col.key])) * sort.dir
@@ -955,6 +1014,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = `${total.toLocaleString()} car${total === 1 ? "" : "s"}`;
     if (!latestImport) return n;
     const when = new Date(latestImport.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    if (markedOn()) return `${n} with dibs, 2nd Wave or notes on the ${when} nationwide sheet`;
     if (scope === "latest") return `${n} on the ${when} nationwide sheet`;
     const old = rows.reduce((k, c) => k + (c.inLatest ? 0 : 1), 0);
     return old ? `${n} (${old.toLocaleString()} older, in grey)` : n;
@@ -1914,7 +1974,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------- All Dibs pop-up ----------
   // Every car on the latest nationwide sheet with a saved dibs, fetched fresh
   // each time it opens. Its table works like the main one, read-only: click
-  // a heading to sort (a dibs or notes heading selects that column instead),
+  // a heading to sort (a dibs or 2nd Wave heading sorts its ticked cars first;
+  // Shift+click it, or click a notes heading, to select that column instead),
   // drag a column edge to resize, and click, drag or Shift+click cells to
   // select them for Ctrl+C. It always shows every column, including ones
   // hidden in the Columns menu. Export downloads the same list as .xlsx.
@@ -1983,6 +2044,22 @@ document.addEventListener("DOMContentLoaded", () => {
           setPopupSel(null);
           renderPopupRows();
         });
+      } else if (c.kind === "dib" || c.kind === "wave") {
+        th.className = "dib-head sortable";
+        th.title = (c.kind === "wave"
+          ? `Click to sort ${WAVE} ticked cars first (then by who is 1st in line: ${names.join(", ")}).`
+          : `Click to sort ${c.name}'s ticked cars first (then no 2nd Wave before 2nd Wave, then by place in line).`) +
+          ` Shift+click to select the whole column, then press ${COPY_KEYS} to copy it`;
+        th.addEventListener("click", (e) => {
+          if (e.shiftKey) {
+            if (pView.length) setPopupSel({ from: 0, to: pView.length - 1, c1: idx, c2: idx });
+            return;
+          }
+          pSort = { key: c.key, dir: pSort.key === c.key ? -pSort.dir : 1 };
+          try { sessionStorage.setItem(P_SORT_KEY, JSON.stringify(pSort)); } catch { /* private mode */ }
+          setPopupSel(null);
+          renderPopupRows();
+        });
       } else {
         th.className = c.kind === "note" ? "" : "dib-head";
         th.title = `Select the whole ${c.label} column, then press ${COPY_KEYS} to copy it`;
@@ -2011,10 +2088,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderPopupRows() {
     pView = pCars.slice();
     for (const c of pCols) {
-      if (c.kind === "car") c.th.setAttribute("aria-sort", pSort.key === c.key ? (pSort.dir > 0 ? "ascending" : "descending") : "none");
+      if (c.kind !== "note") c.th.setAttribute("aria-sort", pSort.key === c.key ? (pSort.dir > 0 ? "ascending" : "descending") : "none");
     }
     const sc = pSort.key && COLUMNS.find((c) => c.key === pSort.key);
-    if (sc) {
+    const sd = pSort.key && pCols.find((c) => (c.kind === "dib" || c.kind === "wave") && c.key === pSort.key);
+    if (sd) {
+      pView.sort(dibSortCompare(sd.name, pSort.dir, hasSavedDib)); // the pop-up shows saved ticks only
+    } else if (sc) {
       pView.sort(sc.num
         ? (a, b) => (Number(a[sc.key]) - Number(b[sc.key])) * pSort.dir
         : (a, b) => collator.compare(String(a[sc.key]), String(b[sc.key])) * pSort.dir);
@@ -2309,9 +2389,10 @@ document.addEventListener("DOMContentLoaded", () => {
       total = page.total;
       latestImport = page.latest || null;
       scope = page.scope;
-      // A search covers every car anyway, so the checkbox has nothing to add.
+      // A search covers every car anyway, so the checkbox has nothing to add;
+      // View All Dibs only ever shows the latest sheet's cars.
       const searching = !!(q.value.trim() || vins.length);
-      includeOld.disabled = searching || !latestImport;
+      includeOld.disabled = searching || !latestImport || markedOn();
       includeOldLabel.classList.toggle("disabled", includeOld.disabled);
       updateVinSummary(vins, page.notFound || []);
       if (status.classList.contains("err")) SF.setStatus(status, "", "");
@@ -2341,11 +2422,13 @@ document.addEventListener("DOMContentLoaded", () => {
     cityFilter.setValues([]);
     limitSel.value = DEFAULTS.limit;
     includeOld.checked = DEFAULTS.old;
+    setMarked(DEFAULTS.marked);
     vinBox.value = DEFAULTS.vins;
     sort = { ...DEFAULTS.sort };
     reload();
   });
   includeOld.addEventListener("change", reload);
+  viewAllBtn.addEventListener("click", () => { setMarked(!markedOn()); reload(); });
   limitSel.addEventListener("change", reload);
   prev.addEventListener("click", () => { offset = Math.max(0, offset - Number(limitSel.value)); load(); });
   next.addEventListener("click", () => { offset += Number(limitSel.value); load(); });

@@ -46,6 +46,10 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('places')::text[] IS NULL OR (state || '|' || city) = ANY(sqlc.narg('places')::text[]))
   AND (sqlc.narg('vins')::text[] IS NULL OR vin = ANY(sqlc.narg('vins')::text[]))
   AND (sqlc.narg('import_id')::bigint IS NULL OR last_import_id = sqlc.narg('import_id')::bigint)
+  AND (NOT sqlc.arg('marked')::boolean
+       OR EXISTS (SELECT 1 FROM car_dibs d WHERE d.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_second_wave w WHERE w.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_notes n WHERE n.vin = cars.vin AND btrim(n.note) <> ''))
 ORDER BY state, city, year, make, model
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
@@ -59,7 +63,11 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('states')::text[] IS NULL OR state = ANY(sqlc.narg('states')::text[]))
   AND (sqlc.narg('places')::text[] IS NULL OR (state || '|' || city) = ANY(sqlc.narg('places')::text[]))
   AND (sqlc.narg('vins')::text[] IS NULL OR vin = ANY(sqlc.narg('vins')::text[]))
-  AND (sqlc.narg('import_id')::bigint IS NULL OR last_import_id = sqlc.narg('import_id')::bigint);
+  AND (sqlc.narg('import_id')::bigint IS NULL OR last_import_id = sqlc.narg('import_id')::bigint)
+  AND (NOT sqlc.arg('marked')::boolean
+       OR EXISTS (SELECT 1 FROM car_dibs d WHERE d.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_second_wave w WHERE w.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_notes n WHERE n.vin = cars.vin AND btrim(n.note) <> ''));
 
 -- name: ListStates :many
 SELECT DISTINCT state FROM cars ORDER BY state;

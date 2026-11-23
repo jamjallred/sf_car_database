@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inventory · SF Car Database</title>
-  <link rel="stylesheet" href="/app/static/css/app.css?v=6">
+  <link rel="stylesheet" href="/app/static/css/app.css?v=9">
   <script src="/app/static/js/common.js?v=2" defer></script>
 </head>
 <body>
@@ -15,7 +15,7 @@
       <h1>Inventory</h1>
       <p>The cars on the latest nationwide sheet, in the same column order. Searching or pasting VINs also finds older cars, shown in grey. Tick a name to call dibs on a car, then press <b>Call Dibs</b> to save. Click the <b>Notes</b> tab on the right to show everyone's notes; they save on their own when you leave the cell, and dragging the square in a note's corner copies it down.</p>
       </div>
-      <button class="btn go" id="all-dibs-btn" type="button" aria-haspopup="dialog" aria-controls="all-dibs" title="Every car on the latest nationwide sheet that someone has dibs on">All Dibs</button>
+      <button class="btn go" id="all-dibs-btn" type="button" aria-haspopup="dialog" aria-controls="all-dibs" title="Every car on the latest nationwide sheet that someone has dibs on, ready to export">Export Dibs</button>
     </div>
 
     <div class="toolbar">
@@ -62,8 +62,13 @@
       <span class="notes-state" id="notes-state" role="status"></span>
       <button class="link-btn" id="notes-undo" type="button" hidden>Undo</button>
       <span class="pending-note" id="pending-note"></span>
-      <button class="btn secondary" id="dibs-discard" type="button" hidden>Discard changes</button>
-      <button class="btn" id="dibs-save" type="button" disabled><span class="spinner"></span><span class="label">Call Dibs</span></button>
+      <div class="dibs-actions">
+        <button class="btn secondary toggle" id="view-all-dibs" type="button" aria-pressed="false" title="Show only the latest nationwide sheet's cars that have a dibs, a 2nd Wave tick or a note">View All Dibs</button>
+        <div class="dibs-actions-row">
+          <button class="btn secondary" id="dibs-discard" type="button" hidden>Discard changes</button>
+          <button class="btn" id="dibs-save" type="button" disabled><span class="spinner"></span><span class="label">Call Dibs</span></button>
+        </div>
+      </div>
     </div>
     <div class="status" id="inv-status" role="status"></div>
 
@@ -106,6 +111,6 @@
       <button class="btn secondary" id="next" type="button">Next →</button>
     </div>
   </main>
-  <script src="/app/static/js/inventory.js?v=6" defer></script>
+  <script src="/app/static/js/inventory.js?v=9" defer></script>
 </body>
 </html>

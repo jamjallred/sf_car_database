@@ -22,6 +22,10 @@ WHERE ($1::text IS NULL
   AND ($3::text[] IS NULL OR (state || '|' || city) = ANY($3::text[]))
   AND ($4::text[] IS NULL OR vin = ANY($4::text[]))
   AND ($5::bigint IS NULL OR last_import_id = $5::bigint)
+  AND (NOT $6::boolean
+       OR EXISTS (SELECT 1 FROM car_dibs d WHERE d.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_second_wave w WHERE w.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_notes n WHERE n.vin = cars.vin AND btrim(n.note) <> ''))
 `
 
 type CountCarsParams struct {
@@ -30,6 +34,7 @@ type CountCarsParams struct {
 	Places   []string
 	Vins     []string
 	ImportID *int64
+	Marked   bool
 }
 
 func (q *Queries) CountCars(ctx context.Context, arg CountCarsParams) (int64, error) {
@@ -39,6 +44,7 @@ func (q *Queries) CountCars(ctx context.Context, arg CountCarsParams) (int64, er
 		arg.Places,
 		arg.Vins,
 		arg.ImportID,
+		arg.Marked,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -211,8 +217,12 @@ WHERE ($1::text IS NULL
   AND ($3::text[] IS NULL OR (state || '|' || city) = ANY($3::text[]))
   AND ($4::text[] IS NULL OR vin = ANY($4::text[]))
   AND ($5::bigint IS NULL OR last_import_id = $5::bigint)
+  AND (NOT $6::boolean
+       OR EXISTS (SELECT 1 FROM car_dibs d WHERE d.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_second_wave w WHERE w.vin = cars.vin)
+       OR EXISTS (SELECT 1 FROM car_notes n WHERE n.vin = cars.vin AND btrim(n.note) <> ''))
 ORDER BY state, city, year, make, model
-LIMIT $7 OFFSET $6
+LIMIT $8 OFFSET $7
 `
 
 type SearchCarsParams struct {
@@ -221,6 +231,7 @@ type SearchCarsParams struct {
 	Places   []string
 	Vins     []string
 	ImportID *int64
+	Marked   bool
 	Off      int32
 	Lim      int32
 }
@@ -232,6 +243,7 @@ func (q *Queries) SearchCars(ctx context.Context, arg SearchCarsParams) ([]Car, 
 		arg.Places,
 		arg.Vins,
 		arg.ImportID,
+		arg.Marked,
 		arg.Off,
 		arg.Lim,
 	)
